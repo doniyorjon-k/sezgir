@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("sezgir:theme") === "light" ? "light" : "dark"; } catch { document.documentElement.dataset.theme = "dark"; }</script>
 <style>
 /* Layout: one quiet centred column; the stage is the only framed object; everything else is type and space */
 :root {
@@ -46,7 +47,11 @@ body {
   padding-block: 8px 40px; -webkit-font-smoothing: antialiased;
 }
 .wrap { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-header { display: flex; align-items: baseline; justify-content: space-between; padding-top: 16px; gap: 12px; flex-wrap: wrap; }
+header { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; gap: 12px; flex-wrap: wrap; }
+.head-right { display: flex; align-items: center; gap: 12px; }
+.theme-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.theme-btn:hover { color: var(--ink); }
+.theme-btn svg { display: block; }
 .brand { font-weight: 600; font-size: 17px; letter-spacing: .01em; }
 .brand span { color: var(--accent); }
 .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -176,7 +181,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 <div class="wrap">
   <header>
     <div class="brand">Sez<span>gir</span></div>
-    <div class="meta" id="meta"></div>
+    <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="progress" hidden></div>
   <div id="stageBox" hidden>
@@ -397,6 +402,11 @@ async function runTest(t, params) { show(); showStage(true); redraw = null; hud.
 
 function dateOfNo(n) { return ymd(new Date(LAUNCH.y, LAUNCH.m - 1, LAUNCH.d + n - 1)); }
 function prettyDate(ds) { const [y, m, d] = ds.split("-").map(Number); return `${d}-${MONTHS[m - 1]}`; }
+const SUN = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
+function paintThemeBtn() { const dark = document.documentElement.dataset.theme !== "light"; const b = $("#themeBtn"); b.innerHTML = dark ? SUN : MOON; b.setAttribute("aria-label", dark ? "Oq fonga o'tish" : "Qora fonga o'tish"); b.title = b.getAttribute("aria-label"); }
+$("#themeBtn").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sezgir:theme", next); } catch {} paintThemeBtn(); if (redraw && !stageBox.hidden) redraw(); });
+paintThemeBtn();
 function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
 async function playDaily(date = today) {
   if (typeof date !== "string") date = today;
@@ -422,11 +432,11 @@ function shareText(rec) { const ts = testsOf(rec), sc = rec.results.map(r => r.s
 
 function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
-  const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; svg.append(e); return e; };
-  [.25, .5, .75, 1].forEach(k => add("polygon", { points: [0, 1, 2, 3, 4].map(i => pt(i, R * k).join(",")).join(" "), fill: "none", stroke: css("--line"), "stroke-width": 1 }));
-  [0, 1, 2, 3, 4].forEach(i => { const [x, y] = pt(i, R); add("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: css("--line"), "stroke-width": 1 }); });
-  add("polygon", { points: scores.map((s, i) => pt(i, R * Math.max(s, 3) / 100).join(",")).join(" "), fill: css("--accent"), "fill-opacity": .18, stroke: css("--accent"), "stroke-width": 2 });
-  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: css("--accent") }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${labels[i]} ${s}`); });
+  const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = attrs[k]; if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v); else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
+  [.25, .5, .75, 1].forEach(k => add("polygon", { points: [0, 1, 2, 3, 4].map(i => pt(i, R * k).join(",")).join(" "), fill: "none", stroke: "var(--line)", "stroke-width": 1 }));
+  [0, 1, 2, 3, 4].forEach(i => { const [x, y] = pt(i, R); add("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: "var(--line)", "stroke-width": 1 }); });
+  add("polygon", { points: scores.map((s, i) => pt(i, R * Math.max(s, 3) / 100).join(",")).join(" "), fill: "var(--accent)", "fill-opacity": .18, stroke: "var(--accent)", "stroke-width": 2 });
+  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: "var(--accent)" }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${labels[i]} ${s}`); });
   return svg; }
 
 const WEEKDAYS = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
