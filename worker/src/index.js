@@ -18,18 +18,32 @@ function todayAround() { // a submitted date must be within a day of now (time z
   return [f(new Date(d - 864e5)), f(d), f(new Date(+d + 864e5))];
 }
 
-async function stats(env, date, total) {
-  const agg = await env.DB.prepare("SELECT COUNT(*) AS n, ROUND(AVG(total)) AS avg FROM plays WHERE date = ?").bind(date).first();
-  const rows = await env.DB.prepare("SELECT MIN(total / 10, 9) AS b, COUNT(*) AS c FROM plays WHERE date = ? GROUP BY b").bind(date).all();
-  const hist = Array(10).fill(0); for (const r of rows.results) hist[r.b] = r.c;
-  const all = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS players FROM plays").first();
-  const ta = await env.DB.prepare("SELECT " + [0, 1, 2, 3, 4].map(i => `ROUND(AVG(json_extract(scores, '$[${i}]'))) AS t${i}`).join(", ") + ", MAX(total) AS best FROM plays WHERE date = ?").bind(date).first();
-  const vis = await env.DB.prepare("SELECT COUNT(*) AS c FROM visits WHERE date = ?").bind(date).first();
-  const out = { date, players: agg.n, avg: agg.avg ?? 0, hist, allPlayers: all.players, testAvg: agg.n ? [0, 1, 2, 3, 4].map(i => ta[`t${i}`]) : null, best: ta.best, visitors: vis.c };
-  if (Number.isInteger(total) && agg.n > 0) {
-    const below = await env.DB.prepare("SELECT COUNT(*) AS c FROM plays WHERE date = ? AND total < ?").bind(date, total).first();
-    out.beats = Math.round(below.c / agg.n * 100);
-  }
+// ---------- cheap reads: running counters (meta) + short-lived snapshots (snap + isolate memory) ----------
+const bump = (env, k, by = 1) => env.DB.prepare("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = v + excluded.v").bind(k, by).run();
+async function metaGet(env, keys) { if (!keys.length) return {}; const r = await env.DB.prepare(`SELECT k, v FROM meta WHERE k IN (${keys.map(() => "?").join(",")})`).bind(...keys).all(); const o = {}; for (const x of r.results) o[x.k] = x.v; return o; }
+const MEM = new Map();
+async function cached(env, key, ttl, compute) { // isolate memory first, then the shared snap row, else recompute
+  const now = Date.now(), m = MEM.get(key); if (m && now - m.at < ttl) return m.data;
+  const row = await env.DB.prepare("SELECT at, data FROM snap WHERE k = ?").bind(key).first();
+  if (row && now - row.at < ttl) { const data = JSON.parse(row.data); MEM.set(key, { at: row.at, data }); return data; }
+  const data = await compute();
+  MEM.set(key, { at: now, data }); if (MEM.size > 50) MEM.delete(MEM.keys().next().value);
+  await env.DB.prepare("INSERT INTO snap (k, at, data) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET at = excluded.at, data = excluded.data").bind(key, now, JSON.stringify(data)).run();
+  return data;
+}
+async function statsBase(env, date) { // one pass over the day's plays; everything else comes from counters
+  const rows = await env.DB.prepare("SELECT total, scores FROM plays WHERE date = ?").bind(date).all();
+  const b = { n: 0, sum: 0, hist: Array(10).fill(0), tsum: [0, 0, 0, 0, 0], best: null, totals: [] };
+  for (const r of rows.results) addPlay(b, r.total, JSON.parse(r.scores));
+  const m = await metaGet(env, ["players", "v:" + date]); b.allPlayers = m.players || 0; b.visitors = m["v:" + date] || 0;
+  return b;
+}
+function addPlay(b, total, scores) { b.n++; b.sum += total; b.hist[Math.min(Math.floor(total / 10), 9)]++; scores.forEach((x, i) => b.tsum[i] += Number(x) || 0); b.best = b.best == null ? total : Math.max(b.best, total); b.totals.push(total); }
+async function stats(env, date, total, fresh) { // fresh = [total, scores] just inserted, so the player sees themselves counted
+  let b = await cached(env, "stats:" + date, 60e3, () => statsBase(env, date));
+  if (fresh) { b = structuredClone(b); addPlay(b, fresh[0], fresh[1]); }
+  const out = { date, players: b.n, avg: b.n ? Math.round(b.sum / b.n) : 0, hist: b.hist, allPlayers: Math.max(b.allPlayers, b.n), testAvg: b.n ? b.tsum.map(x => Math.round(x / b.n)) : null, best: b.best, visitors: b.visitors };
+  if (Number.isInteger(total) && b.n > 0) out.beats = Math.round(b.totals.filter(x => x < total).length / b.n * 100);
   return out;
 }
 
@@ -38,19 +52,21 @@ const ONLINE_MS = 5 * 60 * 1000;
 const tzDay = (d = new Date()) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" }); // YYYY-MM-DD
 
 async function live(env) {
-  const day = tzDay();
-  const on = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits WHERE last > ?").bind(Date.now() - ONLINE_MS).first();
-  const td = await env.DB.prepare("SELECT COUNT(*) AS c FROM visits WHERE date = ?").bind(day).first();
-  return { online: on.c, today: td.c, day };
+  return cached(env, "live", 30e3, async () => {
+    const day = tzDay();
+    const on = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits WHERE last > ?").bind(Date.now() - ONLINE_MS).first();
+    const m = await metaGet(env, ["v:" + day]);
+    return { online: on.c, today: m["v:" + day] || 0, day };
+  });
 }
 
-async function summary(env, n = 14) { // last n days: visitors and players per day
-  const since = tzDay(new Date(Date.now() - (n - 1) * 864e5));
-  const v = await env.DB.prepare("SELECT date, COUNT(*) AS c FROM visits WHERE date >= ? GROUP BY date").bind(since).all();
-  const p = await env.DB.prepare("SELECT date, COUNT(*) AS c, ROUND(AVG(total)) AS avg FROM plays WHERE date >= ? GROUP BY date").bind(since).all();
-  const days = []; for (let i = n - 1; i >= 0; i--) { const d = tzDay(new Date(Date.now() - i * 864e5)); const vv = v.results.find(r => r.date === d), pp = p.results.find(r => r.date === d); days.push({ date: d, visitors: vv?.c ?? 0, players: pp?.c ?? 0, avg: pp?.avg ?? null }); }
-  const tot = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits").first();
-  return { days, allVisitors: tot.c };
+async function summary(env, n = 14) { // last n days: visitors and players per day, from the daily counters
+  return cached(env, "summary:" + n, 120e3, async () => {
+    const dates = []; for (let i = n - 1; i >= 0; i--) dates.push(tzDay(new Date(Date.now() - i * 864e5)));
+    const m = await metaGet(env, ["visitors", ...dates.flatMap(d => ["v:" + d, "p:" + d, "s:" + d])]);
+    const days = dates.map(d => { const c = m["p:" + d] || 0; return { date: d, visitors: m["v:" + d] || 0, players: c, avg: c ? Math.round((m["s:" + d] || 0) / c) : null }; });
+    return { days, allVisitors: m.visitors || 0 };
+  });
 }
 
 
@@ -360,7 +376,12 @@ export default {
       if (url.pathname === "/ping" && req.method === "POST") {
         const b = await req.json().catch(() => null);
         if (!b || !CLIENT.test(b.client)) return json({ error: "bad body" }, 400, h);
-        await env.DB.prepare("INSERT INTO visits (date, client, last) VALUES (?, ?, ?) ON CONFLICT(date, client) DO UPDATE SET last = excluded.last").bind(tzDay(), b.client, Date.now()).run();
+        const day = tzDay(), now = Date.now();
+        const ins = await env.DB.prepare("INSERT OR IGNORE INTO visits (date, client, last) VALUES (?, ?, ?)").bind(day, b.client, now).run();
+        if (ins.meta?.changes) { // first visit today: bump daily (and maybe all-time) visitor counters
+          await bump(env, "v:" + day);
+          if (!await env.DB.prepare("SELECT 1 FROM visits WHERE client = ? AND date <> ? LIMIT 1").bind(b.client, day).first()) await bump(env, "visitors");
+        } else await env.DB.prepare("UPDATE visits SET last = ? WHERE date = ? AND client = ?").bind(now, day, b.client).run();
         return json(await live(env), 200, h);
       }
       if (url.pathname === "/submit" && req.method === "POST") {
@@ -370,8 +391,19 @@ export default {
         const scores = b.scores.map(Number); if (scores.some(s => !Number.isInteger(s) || s < 0 || s > 100)) return json({ error: "bad scores" }, 400, h);
         const total = Math.round(scores.reduce((a, s) => a + s, 0) / 5);
         const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, b.client, total, JSON.stringify(scores), Date.now()).run();
-        if (ins.meta?.changes) { ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, b.client).catch(() => {})); }
-        return json(await stats(env, b.date, total), 200, h);
+        const fresh = !!ins.meta?.changes;
+        if (fresh) {
+          await bump(env, "p:" + b.date); await bump(env, "s:" + b.date, total);
+          if (!await env.DB.prepare("SELECT 1 FROM plays WHERE client = ? AND date <> ? LIMIT 1").bind(b.client, b.date).first()) await bump(env, "players");
+          ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, b.client).catch(() => {}));
+        }
+        return json(await stats(env, b.date, total, fresh ? [total, scores] : null), 200, h);
+      }
+      if (url.pathname === "/myplay" && req.method === "GET") { // lets a second device (or a fresh Telegram webview) show today's result instead of a new game
+        const client = url.searchParams.get("client") || "", date = url.searchParams.get("date") || "";
+        if (!CLIENT.test(client) || !DATE.test(date)) return json({ error: "bad query" }, 400, h);
+        const r = await env.DB.prepare("SELECT total, scores FROM plays WHERE date = ? AND client = ?").bind(date, client).first();
+        return json(r ? { total: r.total, scores: JSON.parse(r.scores) } : {}, 200, h);
       }
       return json({ error: "not found" }, 404, h);
     } catch (e) { return json({ error: "server error" }, 500, h); }

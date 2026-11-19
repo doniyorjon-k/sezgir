@@ -924,6 +924,11 @@ readChallenge();
 (async function boot() { const T = window.Telegram && window.Telegram.WebApp;
   if (T && T.initData && API) { const r = await Promise.race([api("/tg/whoami", { initData: T.initData, client: clientId() }), new Promise(ok => setTimeout(ok, 1500))]);
     if (r && /^[a-z0-9]{16,40}$/.test(r.client) && r.client !== clientId()) { store.set("client", r.client); const h = store.get("history", {}); for (const k of Object.keys(h)) h[k].sent = false; store.set("history", h); } }
+  // played today on another device / webview? pull the result so home shows it instead of a fresh game
+  if (T && T.initData && API && !store.get("history", {})[today]) { const p = await Promise.race([api(`/myplay?client=${clientId()}&date=${today}`), new Promise(ok => setTimeout(ok, 1500))]);
+    if (p && Array.isArray(p.scores) && p.scores.length === TESTS.length && !store.get("history", {})[today]) { const params = dailyParams(today);
+      const rec = { date: today, no: todayNo, total: p.total, results: TESTS.map((t, i) => ({ id: t.id, score: p.scores[i], human: "Boshqa qurilmada o'ynalgan.", v: params[i].v })), late: false, sent: true };
+      const h = store.get("history", {}); h[today] = rec; store.set("history", h); } }
   if (OPEN_SUPPORT && API && BOT) supportPage(home); else home();
 })();
 })();
