@@ -23,6 +23,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<script>/* inside Telegram (Mini App) only: load Telegram's SDK before anything touches the URL hash */
+if (/tgWebApp/.test(location.hash) || window.TelegramWebviewProxy || (() => { try { return !!sessionStorage.getItem("__telegram__initParams"); } catch { return false; } })()) document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <script>try { document.documentElement.dataset.theme = localStorage.getItem("sezgir:theme") === "light" ? "light" : "dark"; } catch { document.documentElement.dataset.theme = "dark"; }</script>
 <style>
 /* Layout: one quiet centred column; the stage is the only framed object; everything else is type and space */
@@ -61,6 +63,9 @@ body {
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 8px 40px; -webkit-font-smoothing: antialiased;
 }
+/* Telegram full screen: keep clear of the status bar and Telegram's close/menu buttons */
+html.tg body { padding-top: calc(8px + var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)); padding-bottom: calc(40px + var(--tg-safe-area-inset-bottom, 0px)); }
+html.tg, html.tg body { overscroll-behavior: none; }
 .wrap { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 header { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; gap: 12px; flex-wrap: wrap; }
 .head-right { display: flex; align-items: center; gap: 12px; }
@@ -783,6 +788,13 @@ function home() {
   const r2 = el("div", "row center-row"); r2.append(btn("Qanday o'ynaladi?", false, () => howTo()), btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   show(c); b.focus();
 }
+// ---------- Telegram Mini App: full screen, no swipe-to-close while dragging on the stage ----------
+(function telegram() { const T = window.Telegram && window.Telegram.WebApp; if (!T || !T.initData && T.platform === "unknown") return;
+  document.documentElement.classList.add("tg");
+  const paint = () => { const c = css("--bg") || "#14171d"; try { T.setHeaderColor(c); T.setBackgroundColor(c); if (T.isVersionAtLeast("7.10")) T.setBottomBarColor(c); } catch {} };
+  try { T.ready(); T.expand(); if (T.isVersionAtLeast("7.7")) T.disableVerticalSwipes(); if (T.isVersionAtLeast("8.0") && /^(ios|android|android_x)$/.test(T.platform)) T.requestFullscreen(); } catch {}
+  paint(); new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
 readChallenge();
 home();
 })();
