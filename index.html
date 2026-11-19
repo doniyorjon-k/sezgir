@@ -210,7 +210,21 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .ico svg { display: block; }
 .home-lead { font-size: 17px; max-width: 42ch; text-wrap: balance; }
 .btn.play { min-width: 180px; justify-content: center; font-size: 16px; }
-.home-how { width: 100%; max-width: 520px; margin-top: 12px; }
+.home-test { cursor: pointer; }
+.home-test:hover .tile { border-color: var(--muted); }
+.howto-page h4 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 8px; }
+.hw-flow { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.hw-flow li b { display: block; font-weight: 600; }
+.hw-flow li span { color: var(--muted); font-size: 14px; }
+.hw-tests { display: flex; flex-direction: column; }
+.hw-test { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 6px; border-top: 1px solid var(--line); border-radius: 10px; scroll-margin: 80px; }
+.hw-test.focus { background: var(--accent-soft); }
+.hw-test .tile { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); display: grid; place-items: center; background: var(--surface); }
+.hw-test b { font-weight: 600; } .hw-test p { font-size: 14px; color: var(--muted); } .hw-test small { font-size: 12px; color: var(--muted); }
+.btn.sm { padding: 7px 12px; font-size: 13px; }
+@media (max-width: 480px) { .hw-test { grid-template-columns: 40px minmax(0, 1fr); } .hw-test .btn { grid-column: 2; justify-self: start; } }
+.hw-grades { font-size: 14px; }
+.hw-tips { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 14px; }
 .intro-card { align-items: center; text-align: center; gap: 12px; padding-block: 40px; }
 .intro-card h2 { font-size: 26px; display: inline-flex; align-items: center; gap: 10px; }
 .intro-card .about { max-width: 46ch; font-size: 16px; }
@@ -468,7 +482,7 @@ const today = ymd(), todayNo = puzzleNo(today);
 const now = new Date();
 $("#meta").textContent = `#${todayNo} · ${now.getDate()}-${MONTHS[now.getMonth()]}`;
 function show(...nodes) { screen.replaceChildren(...nodes); paintStatBar(); }
-function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home, .stats-page")) { bar.hidden = true; return; }
+function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home, .stats-page, .howto-page")) { bar.hidden = true; return; }
   const st = statsOf(); const todayRec = store.get("history", {})[today];
   const items = [["O'yinlar", st.played], ["Ketma-ket", st.streak, st.streak > 0], ["Eng yaxshi", st.best ? `${grade(st.best)} · ${st.best}` : "–"], ["Bugun", todayRec ? `${grade(todayRec.total)} · ${todayRec.total}` : "–", !!todayRec]];
   bar.replaceChildren(...items.map(([k, v, hot]) => { const d = el("div"); const b = el("b", hot ? "hot" : null, String(v)); d.append(b, el("small", null, k)); return d; })); bar.hidden = false; }
@@ -646,16 +660,29 @@ async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const
   const c = el("section", "panel"); const v = el("div", "verdict"); v.append(el("b", null, String(s)), el("span", "chip", `${grade(s)} · ${title(s)}`), el("div", "what", r.human)); c.append(el("div", "step", "mashq · hisobga olinmaydi"), v);
   const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Boshqa test tanlash", false, practiceMenu)); c.append(row, backLink("Bosh sahifa", home)); show(c); row.firstChild.focus(); }
 
+function howTo(focusId) {
+  showStage(false); progress.hidden = true; setMeta(todayNo, today);
+  const c = el("section", "card howto-page"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Qo'llanma"), el("h2", null, "Qanday o'ynaladi?"),
+    el("p", "lead", "Har kuni hamma uchun bir xil beshta qisqa test. Har bir test 0 dan 100 gacha ball beradi, umumiy natija ularning o'rtachasi. Butun o'yin taxminan ikki daqiqa."));
+  const flow = el("ol", "hw-flow"); [["O'ynash", "Bosh sahifadagi «O'ynash» tugmasini bosing."], ["Har bir test oldidan", "Qisqa tushuntirish chiqadi. «Tayyorman» bosilgach 3-2-1 sanog'i boshlanadi."], ["Natija", "Har testdan keyin ballingiz ko'rinadi, 3 soniyadan keyin keyingisi boshlanadi."], ["Yakun", "Umumiy baho (A+ dan F gacha) va natijani do'stlarga ulashish."]].forEach(([h, p]) => { const li = el("li"); li.append(el("b", null, h), el("span", null, p)); flow.append(li); });
+  const tests = el("div", "hw-tests"); let focusEl = null;
+  TESTS.forEach((t, i) => { const r = el("div", "hw-test"); r.id = `hw-${t.id}`; const tile = el("span", "tile"); tile.append(icon(t, 24)); const mid = el("div"); mid.append(el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about), el("small", null, "Baholash: " + t.rule)); const tr = btn("Sinab ko'rish", false, () => practice(t)); tr.classList.add("sm"); r.append(tile, mid, tr); tests.append(r); if (t.id === focusId) { r.classList.add("focus"); focusEl = r; } });
+  const grades = el("p", "hw-grades", GRADE_SCALE);
+  const tips = el("ul", "hw-tips"); ["Yangi jumboq har kuni yarim tunda chiqadi. Hamma bir xil topshiriqni o'ynaydi.", "Kuniga bir marta o'ynaladi. «Mashq qilish» natijalari hisobga olinmaydi.", "O'tkazib yuborgan kunlaringizni «Arxiv»dan o'ynashingiz mumkin.", "Doira testi uchun ovozni yoqing."].forEach(x => tips.append(el("li", null, x)));
+  const row = el("div", "row center-row"); const doneToday = store.get("history", {})[today];
+  row.append(btn(doneToday ? "Bugungi natijam" : "O'ynash", true, () => doneToday ? home() : playDaily(today)), btn("Mashq qilish", false, practiceMenu));
+  c.append(el("h4", null, "O'yin tartibi"), flow, el("h4", null, "Beshta test"), tests, el("h4", null, "Baholar"), grades, el("h4", null, "Bilish foydali"), tips, row);
+  show(c); if (focusEl) focusEl.scrollIntoView({ block: "center" }); else window.scrollTo(0, 0);
+}
 function home() {
   clearInterval(spTimer);
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
   if (done) { renderResults(done); return; }
   const c = el("section", "home"); const d = new Date();
-  const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); icons.append(x); });
+  const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); x.title = t.name; x.addEventListener("click", () => howTo(t.id)); icons.append(x); });
   c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
-  const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
-  const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); x.append(icon(t, 20), el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
+  const r2 = el("div", "row center-row"); r2.append(btn("Qanday o'ynaladi?", false, () => howTo()), btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   show(c); b.focus();
 }
 home();
