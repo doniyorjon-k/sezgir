@@ -120,6 +120,7 @@ async function remind(env, evening) {
   for (const u of users.results) {
     const { streak, todayRec } = await streakOf(env, u.client);
     let text;
+    if (!evening && todayRec != null) continue; // already played after midnight
     if (!evening) text = `☀️ Sezgir #${no} tayyor. Bugungi beshta test sizni kutmoqda.${streak ? `\nSeriyangiz: ${streak} kun 🔥` : ""}`;
     else if (todayRec == null && streak > 0) text = `Bugun hali o'ynamadingiz. ${streak} kunlik seriyangiz yarim tunda uziladi 🔥`;
     if (!text) continue;
@@ -235,8 +236,9 @@ async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note i
   const day = tzDay(), yday = shiftDay(day, -1);
   const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all();
   for (const g of groups.results) {
-    const w = (await groupBoard(env, g.chat_id, yday)).played[0];
-    const text = `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?${w ? `\nKechagi g'olib: 🥇 ${w.name || "O'yinchi"}, ${gradeOf(w.total)} · ${w.total}` : ""}`;
+    const w = (await groupBoard(env, g.chat_id, yday)).played[0], now = (await groupBoard(env, g.chat_id, day)).played, lead = now[0];
+    const head = lead ? `☀️ Sezgir #${puzzleNo(day)}: ${now.length} kishi allaqachon o'ynadi.\nHozircha peshqadam: ${lead.name || "O'yinchi"}, ${gradeOf(lead.total)} · ${lead.total}. Kim o'zib ketadi?` : `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?`;
+    const text = `${head}${w ? `\nKechagi g'olib: 🥇 ${w.name || "O'yinchi"}, ${gradeOf(w.total)} · ${w.total}` : ""}`;
     const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
