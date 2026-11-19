@@ -31,8 +31,24 @@ async function stats(env, date, total) {
   return out;
 }
 
+// visitors online + today, read from DataFast with a secret key kept in the worker (DATAFAST_KEY)
+async function live(env, ctx) {
+  const cache = caches.default, key = new Request("https://cache.sezgir/live");
+  const hit = await cache.match(key); if (hit) return hit.json();
+  if (!env.DATAFAST_KEY) return { online: null, today: null };
+  const auth = { headers: { Authorization: `Bearer ${env.DATAFAST_KEY}` } };
+  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" }); // YYYY-MM-DD
+  const [rt, ov] = await Promise.all([
+    fetch("https://datafa.st/api/v1/analytics/realtime?fields=visitors", auth).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`https://datafa.st/api/v1/analytics/overview?startAt=${day}&endAt=${day}&timezone=Asia/Tashkent&fields=visitors`, auth).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+  const out = { online: rt?.data?.[0]?.visitors ?? null, today: ov?.data?.[0]?.visitors ?? null };
+  ctx.waitUntil(cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=60" } })));
+  return out;
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const h = cors(req, env), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
     try {
@@ -42,6 +58,7 @@ export default {
         const t = url.searchParams.get("total"); const total = t === null ? undefined : parseInt(t, 10);
         return json(await stats(env, date, total), 200, { ...h, "Cache-Control": "public, max-age=30" });
       }
+      if (url.pathname === "/live" && req.method === "GET") return json(await live(env, ctx), 200, { ...h, "Cache-Control": "public, max-age=30" });
       if (url.pathname === "/submit" && req.method === "POST") {
         const b = await req.json().catch(() => null);
         if (!b || !DATE.test(b.date) || !CLIENT.test(b.client) || !Array.isArray(b.scores) || b.scores.length !== 5) return json({ error: "bad body" }, 400, h);

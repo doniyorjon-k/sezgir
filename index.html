@@ -148,6 +148,14 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .hcol i { width: 100%; background: var(--line); border-radius: 4px 4px 0 0; display: block; }
 .hcol.me i { background: var(--accent); }
 .hcol small { font-size: 10px; color: var(--muted); }
+.pulse { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.pulse i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); flex: none; }
+.pulse b { color: var(--good); font-weight: 600; }
+.pulse span.go { color: var(--ink); }
+.pulse:hover span.go { text-decoration: underline; }
+header { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand pulse right"; align-items: center; column-gap: 18px; }
+header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .head-right { grid-area: right; }
+@media (max-width: 560px) { header { grid-template-columns: 1fr auto; grid-template-areas: "brand right" "pulse pulse"; row-gap: 6px; } .pulse { font-size: 12px; } }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
@@ -208,7 +216,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 
 <div class="wrap">
   <header>
-    <div class="brand">Sez<span>gir</span></div>
+    <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" target="_blank" rel="noopener"></a>
     <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="statbar" class="statbar" hidden></div>
@@ -225,6 +233,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 (() => {
 const GAME = "Sezgir";
 const API = ""; // stats server (Cloudflare Worker) base URL; empty = global stats off
+const LIVE_STATS = "https://datafa.st/share/6afe9c0384dcacca0a564198"; // public DataFast dashboard
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -416,7 +425,7 @@ const today = ymd(), todayNo = puzzleNo(today);
 const now = new Date();
 $("#meta").textContent = `#${todayNo} · ${now.getDate()}-${MONTHS[now.getMonth()]}`;
 function show(...nodes) { screen.replaceChildren(...nodes); paintStatBar(); }
-function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden) { bar.hidden = true; return; }
+function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home")) { bar.hidden = true; return; }
   const st = statsOf(); const todayRec = store.get("history", {})[today];
   const items = [["O'yinlar", st.played], ["Ketma-ket", st.streak, st.streak > 0], ["Eng yaxshi", st.best ? `${grade(st.best)} · ${st.best}` : "–"], ["Bugun", todayRec ? `${grade(todayRec.total)} · ${todayRec.total}` : "–", !!todayRec]];
   bar.replaceChildren(...items.map(([k, v, hot]) => { const d = el("div"); const b = el("b", hot ? "hot" : null, String(v)); d.append(b, el("small", null, k)); return d; })); bar.hidden = false; }
@@ -447,6 +456,12 @@ const MOON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke
 function paintThemeBtn() { const dark = document.documentElement.dataset.theme !== "light"; const b = $("#themeBtn"); b.innerHTML = dark ? SUN : MOON; b.setAttribute("aria-label", dark ? "Oq fonga o'tish" : "Qora fonga o'tish"); b.title = b.getAttribute("aria-label"); }
 $("#themeBtn").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sezgir:theme", next); } catch {} paintThemeBtn(); if (redraw && !stageBox.hidden) redraw(); });
 paintThemeBtn();
+// header pulse: "N onlayn · bugun M · statistika →" (numbers come from our stats server, which reads DataFast)
+function paintPulse(live) { const p = $("#pulse"); p.href = LIVE_STATS; p.replaceChildren(el("i"));
+  if (live && Number.isFinite(live.online)) { p.append(el("b", null, `${live.online} onlayn`), document.createTextNode(` · bugun ${live.today ?? 0} tashrif · `), el("span", "go", "statistika →")); }
+  else p.append(el("span", "go", "Jonli statistika →")); }
+async function refreshPulse() { paintPulse(await api("/live")); }
+paintPulse(null); if (API) { refreshPulse(); setInterval(refreshPulse, 60000); }
 function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
 async function playDaily(date = today) {
   if (typeof date !== "string") date = today;
