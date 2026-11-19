@@ -683,9 +683,7 @@ async function shareImage(rec, link) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast("Rasm yuklab olindi, endi Telegram yoki story'ga joylang"); }
 
-function tgText(rec, challenge) { const sc = rec.results.map(r => r.score);
-  return challenge ? `🎯 ${GAME} #${rec.no}: men ${grade(rec.total)} oldim (${rec.total} ball)\n${sc.map(square).join("")}\n\nMendan o'ta olasizmi? Havolani oching, o'ynab bo'lgach natijalarimiz yonma-yon chiqadi.`
-    : `🎯 ${GAME} #${rec.no}: ${grade(rec.total)} (${rec.total} ball)\n${sc.map(square).join("")}\n\nKo'zingiz qanchalik aniq? Sinab ko'ring.`; }
+function tgText(rec, challenge) { return challenge ? "Bugungi Sezgir'ni o'ynadim. Mendan o'ta olasizmi? Havolani oching, o'ynab bo'lgach natijalarimiz yonma-yon chiqadi." : "Ko'zingiz qanchalik aniq? Sezgir'ni sinab ko'ring: har kuni 5 ta qisqa test, 2 daqiqa."; }
 function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
   const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = attrs[k]; if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v); else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
