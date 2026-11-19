@@ -3,7 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Sezgir: har kuni 5 ta qisqa idrok testi.">
+<meta name="description" content="Ko'zingiz qanchalik aniq? Har kuni 5 ta qisqa idrok testi, 2 daqiqa. Do'stlaringiz bilan bellashing.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sezgir">
+<meta property="og:title" content="Sezgir: ko'zingiz qanchalik aniq?">
+<meta property="og:description" content="Har kuni 5 ta qisqa idrok testi, 2 daqiqa. Do'stlaringiz bilan bellashing.">
+<meta property="og:url" content="https://sezgir.github.io/">
+<meta property="og:image" content="https://sezgir.github.io/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="uz_UZ">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://sezgir.github.io/og.png">
+<meta name="theme-color" content="#14171d">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Sezgir</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -144,6 +158,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 /* share + challenge */
 .share-box { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .share-box .sb-head { font-weight: 500; }
+.tg-btn svg { color: #5ea9dd; }
 .share-prev { width: 168px; aspect-ratio: 4 / 5; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); display: block; }
 .name-in { font: 400 14px var(--font-body); width: min(260px, 100%); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center; }
 .name-in::placeholder { color: var(--muted); }
@@ -668,6 +683,9 @@ async function shareImage(rec, link) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast("Rasm yuklab olindi, endi Telegram yoki story'ga joylang"); }
 
+function tgText(rec, challenge) { const sc = rec.results.map(r => r.score);
+  return challenge ? `🎯 ${GAME} #${rec.no}: men ${grade(rec.total)} oldim (${rec.total} ball)\n${sc.map(square).join("")}\n\nMendan o'ta olasizmi? Havolani oching, o'ynab bo'lgach natijalarimiz yonma-yon chiqadi.`
+    : `🎯 ${GAME} #${rec.no}: ${grade(rec.total)} (${rec.total} ball)\n${sc.map(square).join("")}\n\nKo'zingiz qanchalik aniq? Sinab ko'ring.`; }
 function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
   const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = attrs[k]; if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v); else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
@@ -701,8 +719,8 @@ function renderResults(rec) {
   const prev = el("img", "share-prev"); prev.alt = "Ulashiladigan natija kartasi"; drawCard(rec).then(cv2 => { prev.src = cv2.toDataURL("image/png"); }); sb.append(prev);
   if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
   const img = btn("Rasm bilan ulashish", true, () => shareImage(rec, link())); img.classList.add("big");
-  const tg = el("a", "btn", "Telegram'da yuborish"); tg.target = "_blank"; tg.rel = "noopener";
-  const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(shareText(rec) + (isToday ? "\nMendan o'ta olasizmi?" : "")); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
+  const tg = el("a", "btn tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append("Telegram'da yuborish"); tg.target = "_blank"; tg.rel = "noopener";
+  const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(tgText(rec, isToday)); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
   const cp = btn("Matnni nusxalash", false, () => { const txt = `${shareText(rec)}\n${link()}`; const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } });
   const s1 = el("div", "row center-row"); s1.append(img); const s2 = el("div", "row center-row"); s2.append(tg, cp); sb.append(s1, s2); c.append(sb);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
