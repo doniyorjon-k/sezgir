@@ -365,7 +365,6 @@ const ICONS = {
   atlas: '<rect x="4" y="5" width="16" height="14" rx="2"/>'
 };
 function icon(t, size = 24) { const sp = el("span", "ico"); sp.style.color = `var(${t.color})`; sp.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[t.id] || ""}</svg>`; return sp; }
-function square(s) { return s >= 80 ? "🟩" : s >= 50 ? "🟨" : "🟥"; }
 
 // ---------- stage ----------
 const cv = $("#cv"), g = cv.getContext("2d"), hud = $("#hud"), stageBox = $("#stageBox"), screen = $("#screen"), progress = $("#progress");
@@ -634,7 +633,7 @@ function statsOf() {
 // tests retired from the daily set, so old records still render
 const RETIRED = { atlas: { id: "atlas", name: "Atlas rangi", short: "Rang", color: "--muted" } };
 function testsOf(rec) { return rec.results.map(r => TESTS.find(t => t.id === r.id) || RETIRED[r.id] || { id: r.id, name: r.id, short: r.id, color: "--muted" }); }
-function shareText(rec) { const ts = testsOf(rec), sc = rec.results.map(r => r.score); return `${GAME} #${rec.no}: ${grade(rec.total)} · ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${ts.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
+function shareText(rec) { return tgText(rec, rec.date === today); }
 
 const SITE = "https://sezgir.github.io/";
 // ---------- challenge link: ?vs=<no>.<s1>.<s2>.<s3>.<s4>.<s5>&n=<name> ----------
