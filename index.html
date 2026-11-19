@@ -280,24 +280,30 @@ const TESTS = [
     g.strokeStyle = css("--ink"); g.lineWidth = 2; g.beginPath(); g.moveTo(Math.min(r.x, p.land), 482); g.lineTo(Math.max(r.x, p.land), 482); g.stroke();
     text(`${Math.round(r.err)} px`, 400, 90, { size: 44 }); legend([["chillak tushgan joy", css("--gold")], ["siz bosgan joy", css("--accent")]], 140); } },
 
-{ id: "atlas", name: "Atlas rangi", short: "Rang", color: "--accent", sigma: 18,
-  about: "Mato rangi 1,5 soniya ko'rinadi. Keyin rang chizig'idan o'sha rangni topasiz.",
-  steps: ["3-2-1 dan keyin atlas matosining rangi 1,5 soniya ko'rinadi.", "Rangni eslab qoling: keyin ekran bir lahza aralash ranglarga to'ladi.", "Pastdagi rang chizig'ini surib, eslagan rangingizni toping va «Shu rang»ni bosing."],
-  rule: "rang tusida 18° farq = 50 ball (rang doirasi 360°)",
-  gen(r) { return { h: r.range(0, 360), start: r.range(90, 270) }; },
-  swatch(h, x, y, w, hh) { g.save(); g.fillStyle = `hsl(${h} 55% 58%)`; g.beginPath(); g.roundRect(x, y, w, hh, 18); g.fill(); g.clip(); g.globalAlpha = .12; g.fillStyle = "#fff"; for (let i = -1; i < 8; i++) { g.beginPath(); const cx = x + i * w / 6 + w / 12; g.moveTo(cx, y + hh / 2 - 34); g.lineTo(cx + 22, y + hh / 2); g.lineTo(cx, y + hh / 2 + 34); g.lineTo(cx - 22, y + hh / 2); g.fill(); } g.restore(); },
-  hueBar(hue) { const grd = g.createLinearGradient(80, 0, 720, 0); for (let i = 0; i <= 12; i++) grd.addColorStop(i / 12, `hsl(${i * 30} 55% 58%)`); g.fillStyle = grd; g.beginPath(); g.roundRect(80, 360, 640, 50, 25); g.fill(); const kx = 80 + hue / 360 * 640; g.lineWidth = 6; g.strokeStyle = css("--surface"); g.beginPath(); g.arc(kx, 385, 26, 0, 7); g.stroke(); g.lineWidth = 2; g.strokeStyle = css("--ink"); g.beginPath(); g.arc(kx, 385, 30, 0, 7); g.stroke(); },
-  preview() { clear(); this.swatch(30, 200, 50, 400, 230); this.hueBar(30); },
-  async run(p) { live("Rangni eslab qoling", "1,5 soniya"); await countdown(); const t0 = performance.now(); while (performance.now() - t0 < 1500) { clear(); this.swatch(p.h, 160, 70, 480, 320); timerBar((performance.now() - t0) / 1500); await frame(); }
-    const t1 = performance.now(); while (performance.now() - t1 < 500) { clear(); for (let i = 0; i < 260; i++) { g.fillStyle = `hsl(${Math.random() * 360} 45% 60%)`; g.fillRect(Math.random() * W, Math.random() * H, 18, 18); } await frame(); }
-    live("Endi o'sha rangni toping", "chiziqni surib rang tanlang, so'ng «Shu rang»ni bosing");
-    let hue = p.start, drag = false;
-    const draw = () => { clear(); this.swatch(hue, 250, 40, 300, 190); text("sizning tanlovingiz", 400, 270, { size: 24, weight: 500, color: css("--muted") }); this.hueBar(hue); }; redraw = draw;
-    const setFrom = e => { const q = toLogical(e); hue = clamp((q.x - 80) / 640, 0, 1) * 360; draw(); };
+{ id: "minora", name: "Minora", short: "Balandlik", color: "--accent", sigma: .1,
+  about: "Minora 1,5 soniya ko'rinadi. Keyin yonida xuddi shu balandlikdagi minorani o'zingiz qurasiz.",
+  steps: ["3-2-1 dan keyin chap tomonda minora 1,5 soniya ko'rinadi.", "Uning balandligini eslab qoling: keyin minora yo'qoladi.", "O'ng tomondagi minorani yuqoriga-pastga surib, o'sha balandlikka keltiring va «Shu balandlik»ni bosing."],
+  rule: "10% farq = 50 ball (aniq balandlik = 100 ball)",
+  gen(r) { const h = r.range(150, 390); let start; do { start = r.range(130, 400); } while (Math.abs(start - h) < 70); return { h, start }; },
+  ground() { g.fillStyle = css("--line"); g.fillRect(0, 450, W, 50); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(0, 450); g.lineTo(W, 450); g.stroke(); },
+  tower(x, h, color, alpha = 1) { const T = 450 - h; g.save(); g.globalAlpha = alpha; g.fillStyle = color;
+    g.beginPath(); g.moveTo(x - 30, 450); g.lineTo(x - 22, T + 50); g.lineTo(x + 22, T + 50); g.lineTo(x + 30, 450); g.closePath(); g.fill();
+    g.beginPath(); g.roundRect(x - 32, T + 40, 64, 10, 3); g.fill(); g.fillRect(x - 16, T + 17, 32, 24); g.beginPath(); g.arc(x, T + 17, 16, Math.PI, 0); g.fill();
+    g.globalAlpha = alpha * .25; g.fillStyle = "#fff"; for (let y = T + 80; y < 430; y += 46) { const w = 22 + 8 * (y - T - 50) / (400 - T); g.fillRect(x - w + 4, y, 2 * w - 8, 4); } g.fillRect(x - 6, T + 22, 12, 14); g.restore(); },
+  preview() { clear(); this.ground(); this.tower(250, 300, css("--accent")); this.tower(550, 210, css("--muted"), .35); text("?", 550, 180, { size: 60, weight: 500, color: css("--accent") }); },
+  async run(p) { live("Balandlikni eslab qoling", "minora 1,5 soniya ko'rinadi"); await countdown(() => { this.ground(); });
+    const t0 = performance.now(); while (performance.now() - t0 < 1500) { clear(); this.ground(); this.tower(230, p.h, css("--accent")); timerBar((performance.now() - t0) / 1500); await frame(); }
+    live("Endi o'sha balandlikni quring", "minorani yuqoriga-pastga suring, so'ng «Shu balandlik»ni bosing");
+    let h = p.start, drag = false;
+    const draw = () => { clear(); this.ground(); g.save(); g.setLineDash([6, 8]); g.strokeStyle = css("--line"); g.lineWidth = 2; g.strokeRect(200, 60, 60, 390); g.restore(); text("?", 230, 300, { size: 48, weight: 500, color: css("--muted") }); this.tower(570, h, css("--ink"), .85); text("↕", 650, 450 - h + 20, { size: 34, weight: 500, color: css("--muted") }); }; redraw = draw;
+    const setFrom = e => { h = clamp(450 - toLogical(e).y, 100, 430); draw(); };
     const down = e => { drag = true; cv.setPointerCapture(e.pointerId); setFrom(e); }, move = e => { if (drag) setFrom(e); }, up = () => drag = false;
-    cv.addEventListener("pointerdown", down); cv.addEventListener("pointermove", move); cv.addEventListener("pointerup", up); draw();
-    return await new Promise(res => { const b = btn("Shu rang", true, () => { b.remove(); cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerup", up); const d = Math.abs(((hue - p.h) % 360 + 540) % 360 - 180); res({ err: d, human: d < 3 ? "Rangni deyarli aynan topdingiz!" : `Siz tanlagan rang asl rangdan ${Math.round(d)}° farq qildi.`, hue }); }); const row = el("div", "row"); row.append(b); screen.append(row); }); },
-  reveal(p, r) { clear(); this.swatch(p.h, 90, 110, 290, 230); this.swatch(r.hue, 420, 110, 290, 230); text("asl rang", 235, 380, { size: 26, weight: 500, color: css("--muted") }); text("siz tanlagan", 565, 380, { size: 26, weight: 500, color: css("--muted") }); text(`${Math.round(r.err)}° farq`, 400, 60, { size: 40 }); } },
+    const key = e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); h = clamp(h + (e.key === "ArrowUp" ? 2 : -2), 100, 430); draw(); } };
+    cv.addEventListener("pointerdown", down); cv.addEventListener("pointermove", move); cv.addEventListener("pointerup", up); window.addEventListener("keydown", key); draw();
+    return await new Promise(res => { const b = btn("Shu balandlik", true, () => { b.remove(); cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerup", up); window.removeEventListener("keydown", key); const d = Math.abs(h - p.h) / p.h, pct = Math.round(d * 100); res({ err: d, human: pct < 2 ? "Balandlikni deyarli aynan topdingiz!" : `Siz qurgan minora ${pct}% ${h > p.h ? "baland" : "past"} chiqdi.`, h }); }); const row = el("div", "row"); row.append(b); screen.append(row); }); },
+  reveal(p, r) { clear(); this.ground(); this.tower(270, p.h, css("--accent")); this.tower(530, r.h, css("--ink"), .85);
+    g.save(); g.setLineDash([6, 6]); g.strokeStyle = css("--accent"); g.lineWidth = 2; g.beginPath(); g.moveTo(220, 450 - p.h); g.lineTo(600, 450 - p.h); g.stroke(); g.restore();
+    text(`${Math.round(r.err * 100)}% farq`, 400, 40, { size: 36 }); legend([["asl minora", css("--accent")], ["siz qurgan", css("--ink")]], 478); } },
 
 { id: "doira", name: "Doira", short: "Ritm", color: "--good", sigma: 100,
   about: "Doira 6 marta uriladi. Keyin jimlikda o'sha usulni 8 marta o'zingiz davom ettirasiz.",
@@ -394,15 +400,18 @@ function statsOf() {
   let streak = 0; const d = new Date(); if (!hist[ymd(d)]) d.setDate(d.getDate() - 1); while (hist[ymd(d)] && !hist[ymd(d)].late) { streak++; d.setDate(d.getDate() - 1); }
   return { played: days.length, streak, best: scores.length ? Math.max(...scores) : 0, avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0 };
 }
-function shareText(rec) { const sc = TESTS.map(t => rec.results.find(r => r.id === t.id).score); return `${GAME} #${rec.no}: ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${TESTS.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
+// tests retired from the daily set, so old records still render
+const RETIRED = { atlas: { id: "atlas", name: "Atlas rangi", short: "Rang", color: "--muted" } };
+function testsOf(rec) { return rec.results.map(r => TESTS.find(t => t.id === r.id) || RETIRED[r.id] || { id: r.id, name: r.id, short: r.id, color: "--muted" }); }
+function shareText(rec) { const ts = testsOf(rec), sc = rec.results.map(r => r.score); return `${GAME} #${rec.no}: ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${ts.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
 
-function radar(scores) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
   const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; svg.append(e); return e; };
   [.25, .5, .75, 1].forEach(k => add("polygon", { points: [0, 1, 2, 3, 4].map(i => pt(i, R * k).join(",")).join(" "), fill: "none", stroke: css("--line"), "stroke-width": 1 }));
   [0, 1, 2, 3, 4].forEach(i => { const [x, y] = pt(i, R); add("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: css("--line"), "stroke-width": 1 }); });
   add("polygon", { points: scores.map((s, i) => pt(i, R * Math.max(s, 3) / 100).join(",")).join(" "), fill: css("--accent"), "fill-opacity": .18, stroke: css("--accent"), "stroke-width": 2 });
-  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: css("--accent") }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${TESTS[i].short} ${s}`); });
+  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: css("--accent") }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${labels[i]} ${s}`); });
   return svg; }
 
 const WEEKDAYS = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
@@ -412,8 +421,8 @@ function renderResults(rec) {
   const c = el("section", "card result-card");
   const hero = el("div", "hero"); const num = el("div", "num"); num.append(el("b", null, String(rec.total)), el("span", null, title(rec.total)));
   hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num, el("p", null, "beshta testning o'rtachasi · 90+ Burgut ko'z, 75+ Ziyrak, 60+ Hushyor, 40+ Chamalar")); c.append(hero);
-  c.append(radar(TESTS.map(t => rec.results.find(r => r.id === t.id).score)));
-  const rows = el("div", "rows"); for (const t of TESTS) { const r = rec.results.find(x => x.id === t.id); const row = el("div", "rrow"); const dot = el("i"); dot.style.background = `var(${t.color})`; const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(dot, mid, el("div", "pts", String(r.score)), el("div", "tier", tier(r.score))); rows.append(row); } c.append(rows);
+  const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
+  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const dot = el("i"); dot.style.background = `var(${t.color})`; const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(dot, mid, el("div", "pts", String(r.score)), el("div", "tier", tier(r.score))); rows.append(row); }); c.append(rows);
   const txt = shareText(rec);
   const share = btn("Natijani ulashish", true, () => { const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } }); share.classList.add("big");
   const tg = el("a", "btn", "Telegram'da ulashish"); tg.href = "https://t.me/share/url?url=" + encodeURIComponent(location.href.split("#")[0]) + "&text=" + encodeURIComponent(txt); tg.target = "_blank"; tg.rel = "noopener";
