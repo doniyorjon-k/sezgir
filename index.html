@@ -129,7 +129,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 </head>
 <body>
 <style>
-/* v2 additions: progress strip, panel under the stage, how-to list, radar */
+/* v2 additions: progress strip, panel under the stage, how-to list */
 #progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 #progress .seg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 #progress .seg i { height: 4px; border-radius: 2px; background: var(--line); display: block; }
@@ -161,9 +161,19 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .global .ghead { font-weight: 500; }
 .global .muted { color: var(--muted); font-size: 13px; }
 .global .muted a { color: var(--accent); }
-.grp { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
-.grp b { color: var(--accent); font-weight: 600; }
-.grp small { color: var(--muted); }
+.sec-h { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; }
+.gtiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.gtiles div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
+.gtiles b { font-size: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.gtiles div:nth-child(2) b { color: var(--accent); }
+.gtiles small { font-size: 12px; color: var(--muted); }
+.grp { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.grow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
+.gmed { font-size: 18px; text-align: center; }
+.gname { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpos { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter { height: 4px; border-radius: 2px; background: var(--line); margin: 6px 0 4px; overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 2px; }
 /* share + challenge */
 .share-box { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .share-box .sb-head { font-weight: 500; }
@@ -311,8 +321,6 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .next { text-align: center; color: var(--muted); font-size: 14px; }
 .remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
 .remind:hover { text-decoration: underline; }
-.radar { width: 100%; max-width: 360px; margin: 0 auto; display: block; }
-.radar text { font: 500 12px var(--font-body); fill: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -732,14 +740,6 @@ async function shareImage(rec, link) {
   toast("Rasm yuklab olindi, endi Telegram yoki story'ga joylang"); }
 
 function tgText(rec, challenge) { return challenge ? "Bugungi Sezgir'ni o'ynadim. Mendan o'ta olasizmi? Havolani oching, o'ynab bo'lgach natijalarimiz yonma-yon chiqadi." : "Ko'zingiz qanchalik aniq? Sezgir'ni sinab ko'ring: har kuni 5 ta qisqa test, 2 daqiqa."; }
-function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
-  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
-  const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = attrs[k]; if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v); else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
-  [.25, .5, .75, 1].forEach(k => add("polygon", { points: [0, 1, 2, 3, 4].map(i => pt(i, R * k).join(",")).join(" "), fill: "none", stroke: "var(--line)", "stroke-width": 1 }));
-  [0, 1, 2, 3, 4].forEach(i => { const [x, y] = pt(i, R); add("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: "var(--line)", "stroke-width": 1 }); });
-  add("polygon", { points: scores.map((s, i) => pt(i, R * Math.max(s, 3) / 100).join(",")).join(" "), fill: "var(--accent)", "fill-opacity": .18, stroke: "var(--accent)", "stroke-width": 2 });
-  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: "var(--accent)" }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${labels[i]} ${s}`); });
-  return svg; }
 
 const WEEKDAYS = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
 async function globalBlock(box, rec) {
@@ -747,21 +747,23 @@ async function globalBlock(box, rec) {
   if (!rec.sent) { st = await api("/submit", { date: rec.date, client: clientId(), scores: rec.results.map(r => r.score) }); if (st) { const h = store.get("history", {}); if (h[rec.date]) { h[rec.date].sent = true; store.set("history", h); } } }
   else st = await api(`/stats?date=${rec.date}&total=${rec.total}`);
   if (!st || !st.players) { box.remove(); return; }
-  const others = st.players - 1, mine = Math.min(Math.floor(rec.total / 10), 9), max = Math.max(...st.hist, 1);
-  const head = others > 0 ? `Bugun ${st.players} kishi o'ynadi. Siz ularning ${st.beats} foizidan yaxshi natija ko'rsatdingiz.` : "Bugun birinchi bo'lib o'ynadingiz!";
-  const bars = el("div", "hist"); st.hist.forEach((n, i) => { const col = el("div", "hcol" + (i === mine ? " me" : "")); const bar = el("i"); bar.style.height = `${Math.max(4, n / max * 100)}%`; col.append(bar, el("small", null, String(i * 10))); bars.append(col); });
-  box.replaceChildren(el("p", "ghead", head), bars, el("p", "muted", `kunlik o'rtacha ball: ${st.avg} · sizning ustuningiz ajratilgan`));
+  const mine = Math.min(Math.floor(rec.total / 10), 9), max = Math.max(...st.hist, 1);
+  const tiles = el("div", "gtiles"); const tile = (v, k) => { const d = el("div"); d.append(el("b", null, v), el("small", null, k)); tiles.append(d); };
+  tile(String(st.players), "o'yinchi"); tile(st.players > 1 ? `${st.beats}%` : "1-chi", st.players > 1 ? "dan yaxshi" : "bo'lib o'ynadingiz"); tile(String(st.avg), "o'rtacha ball");
+  const bars = el("div", "hist"); st.hist.forEach((n, i) => { const col = el("div", "hcol" + (i === mine ? " me" : "")); const bar = el("i"); bar.style.height = `${Math.max(4, n / max * 100)}%`; col.append(bar, el("small", null, i === mine ? "siz" : i % 2 ? "\u00a0" : String(i * 10))); bars.append(col); });
+  box.replaceChildren(el("div", "sec-h", "Bugun"), tiles, bars);
   const mg = await api(`/mygroups?client=${clientId()}&date=${rec.date}`);
-  if (mg && mg.groups && mg.groups.length) { const gl = el("div", "grp"); mg.groups.forEach(g => { const p = el("p"); p.append(el("b", null, `«${g.title}»`), g.rank ? ` guruhida ${g.rank}-o'rindasiz (${g.played} kishidan)` : " guruhida hali o'rningiz yo'q"); if (g.leader && g.rank !== 1) p.append(el("small", null, ` · peshqadam ${g.leader.name}, ${g.leader.total}`)); gl.append(p); }); box.append(gl); }
+  if (mg && mg.groups && mg.groups.length) { const gl = el("div", "grp"); gl.append(el("div", "sec-h", "Guruhlar"));
+    mg.groups.forEach(g => { const row = el("div", "grow"); row.append(el("span", "gmed", g.rank ? (["🥇", "🥈", "🥉"][g.rank - 1] || `${g.rank}`) : "–"), el("span", "gname", g.title), el("span", "gpos", g.rank ? `${g.rank}/${g.played}` : "o'ynamagan")); gl.append(row); }); box.append(gl); }
   else if (BOT) { const p = el("p", "muted"); const a = el("a", null, "Telegram guruhingizga qo'shing"); a.href = `https://t.me/${BOT}?startgroup=1`; a.target = "_blank"; a.rel = "noopener"; p.append("Do'stlar bilan kunlik reyting: botni ", a); box.append(p); } }
 function renderResults(rec) {
   showStage(false); progress.hidden = true; setMeta(rec.no, rec.date);
   const c = el("section", "card result-card");
   const hero = el("div", "hero"); const num = el("div", "num"); num.append(el("b", "grade", grade(rec.total)), el("div", "num-side")); num.lastChild.append(el("strong", null, `${rec.total} ball`), el("span", null, title(rec.total)));
-  hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num, el("p", null, "beshta testning o'rtachasi"), el("p", "scale", GRADE_SCALE)); c.append(hero);
+  hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num); c.append(hero);
   if (API && rec.date === today) { const g = el("div", "global"); g.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); c.append(g); globalBlock(g, rec); }
-  const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
-  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); const nm = el("div", "nm", t.name); if (r.v && r.v !== "classic" && t.variants) nm.append(el("span", "usul", variantName(t, r.v))); mid.append(nm, el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
+  const ts = testsOf(rec); c.append(el("div", "sec-h", "Testlar"));
+  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); const nm = el("div", "nm", t.name); if (r.v && r.v !== "classic" && t.variants) nm.append(el("span", "usul", variantName(t, r.v))); const meter = el("div", "meter"); const fillm = el("i"); fillm.style.width = `${r.score}%`; fillm.style.background = `var(${t.color})`; meter.append(fillm); mid.append(nm, meter, el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
   const v = rec.date === today ? activeVs() : null; if (v) c.append(vsBlock(rec, v));
   const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : (inTg() && BOT ? botLink(null) : SITE);
   const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
