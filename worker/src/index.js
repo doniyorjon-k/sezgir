@@ -65,7 +65,8 @@ async function tg(env, method, body) {
   const r = await fetch(`${env.TG_API || "https://api.telegram.org"}/bot${env.TG_BOT_TOKEN}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return r.json().catch(() => ({ ok: false }));
 }
-const playBtn = (client, label = "O'ynash") => ({ inline_keyboard: [[{ text: label, web_app: { url: `${SITE}?cid=${client}` } }]] });
+// style: Telegram's coloured buttons (success = green, primary = blue, danger = red); older apps just show a normal button
+const playBtn = (client, label = "🎯 O'ynash") => ({ inline_keyboard: [[{ text: label, style: "success", web_app: { url: `${SITE}?cid=${client}` } }]] });
 
 async function streakOf(env, client) { // consecutive days played, counting today or ending yesterday
   if (!client) return { streak: 0, todayRec: null };
@@ -130,7 +131,7 @@ async function remind(env, evening) {
 // ---------- Telegram groups: shared daily leaderboard ----------
 const BOT_USER = "sezgiruz_bot";
 const gradeOf = s => s >= 95 ? "A+" : s >= 88 ? "A" : s >= 80 ? "B+" : s >= 70 ? "B" : s >= 62 ? "C+" : s >= 55 ? "C" : s >= 40 ? "D" : "F";
-const joinBtn = gid => ({ inline_keyboard: [[{ text: "Qatnashish", url: `https://t.me/${BOT_USER}?start=g${gid}` }]] });
+const joinBtn = gid => ({ inline_keyboard: [[{ text: "🏆 Qatnashish", style: "primary", url: `https://t.me/${BOT_USER}?start=g${gid}` }]] });
 const MEDALS = ["🥇", "🥈", "🥉"];
 
 async function groupBoard(env, gid, day) { // members who played `day`, best first; plus members who did not
@@ -165,7 +166,7 @@ async function openChallenge(env, chat, name, u, arg) { // friend's link shared 
   if (no !== today || scores.some(x => x > 100)) { await tg(env, "sendMessage", { chat_id: chat, text: `Bu chaqiruv eski (#${no}). Bugungi Sezgir #${today}ni o'ynab ko'ring!`, reply_markup: playBtn(client) }); return; }
   const total = Math.round(scores.reduce((a, b) => a + b, 0) / 5);
   const url = `${SITE}?cid=${client}&vs=${[no, ...scores].join(".")}&n=${encodeURIComponent(who)}`;
-  await tg(env, "sendMessage", { chat_id: chat, text: `${who} sizni Sezgir'ga chaqirdi 🎯\n\nBugun u ${gradeOf(total)} · ${total} ball oldi. Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.\n\nHar kuni 9:00 da yangi jumboq haqida eslatib turaman (/stop bilan o'chiriladi).`, reply_markup: { inline_keyboard: [[{ text: "Qabul qilaman", web_app: { url } }]] } });
+  await tg(env, "sendMessage", { chat_id: chat, text: `${who} sizni Sezgir'ga chaqirdi 🎯\n\nBugun u ${gradeOf(total)} · ${total} ball oldi. Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.\n\nHar kuni 9:00 da yangi jumboq haqida eslatib turaman (/stop bilan o'chiriladi).`, reply_markup: { inline_keyboard: [[{ text: "🎯 Qabul qilaman", style: "success", web_app: { url } }]] } });
 }
 
 async function onGroupMessage(env, msg) {
