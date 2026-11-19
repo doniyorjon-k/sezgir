@@ -10,6 +10,6 @@ database_id = "c8b83d4c-775d-400b-b9bd-43d5f811ad87"
 [vars]
 ALLOWED_ORIGINS = "https://doniyorjon-k.github.io,https://sezgir.github.io"
 
-# Telegram reminders: 09:00 and 19:00 Asia/Tashkent. Secrets TG_BOT_TOKEN and TG_WEBHOOK_SECRET are set in the Cloudflare dashboard.
+# Telegram reminders 09:00 and 19:00, group boards 21:00 Asia/Tashkent. Secrets TG_BOT_TOKEN and TG_WEBHOOK_SECRET are set in the Cloudflare dashboard.
 [triggers]
-crons = ["0 4 * * *", "0 14 * * *"]
+crons = ["0 4 * * *", "0 14 * * *", "0 16 * * *"]
