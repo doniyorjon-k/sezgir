@@ -152,15 +152,16 @@ async function onPaid(env, msg) {
   await tg(env, "sendMessage", { chat_id: msg.chat.id, text: `Katta rahmat, ${msg.from?.first_name || "do'stim"}! ${p.total_amount} ⭐ qabul qilindi 💛\n\nJami qo'llab-quvvatlovingiz: ${sum.s} ⭐.${anon ? " Ismingiz reytingda ko'rinmaydi." : " Endi guruh reytinglarida ismingiz yonida ⭐ turadi."}` });
 }
 const ASK_DAYS = 5;
-const ASK_TEXT = "🙌 Sezgir bilan 5 kun birga bo‘lganingiz uchun rahmat!\n\nSezgir — bir kishi tomonidan ishlab chiqilgan, bepul va reklamasiz o‘yin. Uni har kuni rivojlantirish, yangi testlar qo‘shish va server xarajatlarini qoplash uchun sizning qo‘llab-quvvatlashingiz katta yordam beradi.\n\nAgar o‘yin sizga yoqayotgan bo‘lsa, uni bir necha ⭐ bilan qo‘llab-quvvatlashingiz mumkin. Har bir yulduz Sezgir’ning yanada rivojlanishiga hissa qo‘shadi.\n\nQo‘llab-quvvatlagan o‘yinchilarning ismi yonida guruh reytingida ⭐ belgisi paydo bo‘ladi.\n\nSezgir muallifi — @doniyorjon_k. O‘yin sizga yoqqan bo‘lsa, unga bildirgan iliq fikringiz yoki oddiygina rahmatingiz ham muallif uchun katta quvonch!\n\nSezgir bilan qolayotganingiz uchun rahmat! ❤️";
+const ASK_TEXT = "🙌 Sezgir bilan 5 kun birga bo‘lganingiz uchun rahmat!\n\nSezgir — bir kishi tomonidan ishlab chiqilgan, bepul va reklamasiz o‘yin. Uni har kuni rivojlantirish, yangi testlar qo‘shish va server xarajatlarini qoplash uchun sizning qo‘llab-quvvatlashingiz katta yordam beradi.\n\nAgar o‘yin sizga yoqayotgan bo‘lsa, uni bir necha ⭐ bilan qo‘llab-quvvatlashingiz mumkin. Har bir yulduz Sezgir’ning yanada rivojlanishiga hissa qo‘shadi.\n\nSezgir muallifi — @doniyorjon_k. O‘yin sizga yoqqan bo‘lsa, unga bildirgan iliq fikringiz yoki oddiygina rahmatingiz ham muallif uchun katta quvonch!\n\nSezgir bilan qolayotganingiz uchun rahmat! ❤️";
 async function maybeAskSupport(env, client) { // once per person, after their 5th day of play, unless they already gave Stars
-  const u = await env.DB.prepare("SELECT chat_id FROM tg_users WHERE client = ? AND active = 1 AND asked = 0").bind(client).first(); if (!u) return;
+  const u = await env.DB.prepare("SELECT chat_id, client FROM tg_users WHERE client = ? AND active = 1 AND asked = 0").bind(client).first(); if (!u) return;
   const d = await env.DB.prepare("SELECT COUNT(DISTINCT date) AS n FROM plays WHERE client = ?").bind(client).first(); if (d.n < ASK_DAYS) return;
   const given = await env.DB.prepare("SELECT 1 FROM donations WHERE chat_id = ? LIMIT 1").bind(u.chat_id).first();
   const claim = await env.DB.prepare("UPDATE tg_users SET asked = 1 WHERE chat_id = ? AND asked = 0").bind(u.chat_id).run(); if (!claim.meta?.changes || given) return;
   const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
-  await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: { inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] }))] } });
+  await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: askButtons(u.client, links) });
 }
+const askButtons = (client, links) => ({ inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] })), [{ text: "Boshqa miqdor yoki karta", web_app: { url: `${SITE}?cid=${client}&qollab=1` } }]] });
 async function supporters(env) {
   const top = await env.DB.prepare("SELECT chat_id, MAX(anon) AS anon, MAX(name) AS name, SUM(stars) AS stars, MAX(created) AS last FROM donations GROUP BY chat_id ORDER BY stars DESC, last ASC LIMIT 10").all();
   const agg = await env.DB.prepare("SELECT COUNT(DISTINCT chat_id) AS people, COALESCE(SUM(stars), 0) AS stars FROM donations").first();

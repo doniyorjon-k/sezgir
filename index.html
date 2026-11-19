@@ -923,7 +923,7 @@ readChallenge();
 (async function boot() { const T = window.Telegram && window.Telegram.WebApp;
   if (T && T.initData && API) { const r = await Promise.race([api("/tg/whoami", { initData: T.initData, client: clientId() }), new Promise(ok => setTimeout(ok, 1500))]);
     if (r && /^[a-z0-9]{16,40}$/.test(r.client) && r.client !== clientId()) { store.set("client", r.client); const h = store.get("history", {}); for (const k of Object.keys(h)) h[k].sent = false; store.set("history", h); } }
-  home();
+  if (new URLSearchParams(location.search).get("qollab") && API && BOT) supportPage(home); else home();
 })();
 })();
 </script>
