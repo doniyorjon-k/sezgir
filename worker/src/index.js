@@ -161,7 +161,7 @@ async function maybeAskSupport(env, client) { // once per person, after their 5t
   const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
   await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: askButtons(u.client, links) });
 }
-const askButtons = (client, links) => ({ inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] })), [{ text: "Boshqa miqdor yoki karta", web_app: { url: `${SITE}?cid=${client}&qollab=1` } }]] });
+const askButtons = (client, links) => ({ inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] })), [{ text: "Boshqa miqdor", web_app: { url: `${SITE}?cid=${client}&qollab=1` } }]] });
 async function supporters(env) {
   const top = await env.DB.prepare("SELECT chat_id, MAX(anon) AS anon, MAX(name) AS name, SUM(stars) AS stars, MAX(created) AS last FROM donations GROUP BY chat_id ORDER BY stars DESC, last ASC LIMIT 10").all();
   const agg = await env.DB.prepare("SELECT COUNT(DISTINCT chat_id) AS people, COALESCE(SUM(stars), 0) AS stars FROM donations").first();
