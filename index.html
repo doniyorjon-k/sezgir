@@ -154,22 +154,51 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 header { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand pulse right"; align-items: center; column-gap: 18px; }
 header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .head-right { grid-area: right; }
 @media (max-width: 560px) { header { grid-template-columns: 1fr auto; grid-template-areas: "brand right" "pulse pulse"; row-gap: 6px; } .pulse { font-size: 12px; } }
-.stats-page h3 { font-size: 14px; font-weight: 600; margin-top: 8px; }
-.sp-body { display: flex; flex-direction: column; gap: 14px; }
+.stats-page h3 { font-size: 16px; font-weight: 600; }
+.stats-page h4 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 6px; }
+.sp-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sp-live { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.sp-live b { color: var(--good); font-size: 18px; font-variant-numeric: tabular-nums; }
+.sp-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 50%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.seg-ctl { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; background: var(--bg); }
+.seg-ctl button { border: 0; background: none; color: var(--muted); font: 500 13px var(--font-body); padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.seg-ctl button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.sp-chart { position: relative; }
+.sp-days { display: grid; gap: 3px; height: 140px; transition: opacity .2s; }
+.sp-days.loading, .sp-daybox.loading { opacity: .4; }
+.sp-day { display: flex; flex-direction: column; gap: 4px; align-items: center; border: 0; background: none; padding: 4px 0 0; border-radius: 6px; cursor: pointer; min-width: 0; }
+.sp-day:hover, .sp-day:focus-visible { background: var(--bg); outline: none; }
+.sp-day.sel { background: var(--accent-soft); }
+.sp-day .bars { flex: 1; width: 100%; display: flex; gap: 2px; align-items: flex-end; padding: 0 2px; }
+.sp-day .bars i { flex: 1; border-radius: 3px 3px 0 0; display: block; height: 0; transition: height .5s cubic-bezier(.2,.8,.2,1); }
+.sp-day small { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; height: 14px; }
+.sp-day.sel small { color: var(--accent); font-weight: 600; }
+i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent); }
+.sp-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.sp-legend span { display: inline-flex; align-items: center; gap: 6px; } .sp-legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.sp-legend .hint { margin-left: auto; }
+.sp-tip { position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%); background: var(--ink); color: var(--bg); font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none; z-index: 2; }
+.sp-daybox { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; transition: opacity .2s; }
 .sp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 @media (min-width: 560px) { .sp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.sp-tiles > div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
-.sp-tiles b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.sp-tiles b.hot { color: var(--good); }
-.sp-tiles small { font-size: 12px; color: var(--muted); }
-.sp-days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; height: 120px; }
-.sp-day { display: flex; flex-direction: column; gap: 4px; align-items: center; }
-.sp-day .bars { flex: 1; width: 100%; display: flex; gap: 2px; align-items: flex-end; }
-.sp-day .bars i { flex: 1; border-radius: 3px 3px 0 0; display: block; }
-.sp-day small { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent); }
-.sp-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
-.sp-legend span { display: inline-flex; align-items: center; gap: 6px; } .sp-legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.sp-tiles > div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 8px; }
+.sp-tiles b { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-tiles .g { font-size: 13px; font-weight: 600; color: var(--accent); }
+.sp-tiles small { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.stats-page .hist { height: 110px; max-width: none; }
+.stats-page .hcol { border: 0; background: none; padding: 0; cursor: pointer; }
+.stats-page .hcol i { background: var(--muted); opacity: .45; height: 0; transition: height .5s cubic-bezier(.2,.8,.2,1); }
+.stats-page .hcol:hover i { opacity: .7; }
+.stats-page .hcol.me i { background: var(--accent); opacity: 1; }
+.sp-note { font-size: 12px; color: var(--muted); }
+.sp-tests { display: flex; flex-direction: column; gap: 10px; }
+.sp-trow { display: grid; grid-template-columns: 20px 120px minmax(0, 1fr) 32px; gap: 10px; align-items: center; font-size: 14px; }
+.sp-trow .nm { display: flex; flex-direction: column; line-height: 1.2; }
+.sp-trow em { font-style: normal; font-size: 11px; color: var(--anor); }
+.sp-trow .track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.sp-trow .track i { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.sp-trow b { text-align: right; font-variant-numeric: tabular-nums; }
 .sp-foot { font-size: 13px; color: var(--muted); }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
@@ -479,18 +508,66 @@ async function ping() { if (document.visibilityState !== "visible") return; cons
 paintPulse(null); if (API) { ping(); setInterval(ping, 120000); document.addEventListener("visibilitychange", ping); }
 $("#pulse").addEventListener("click", e => { e.preventDefault(); if (inGame()) { toast("Statistikani test tugagach ko'rishingiz mumkin"); return; } statsPage(); });
 
+// ---------- stats page: pick a range, tap a day, hover bars for exact numbers ----------
+let spTimer = null;
+function countUp(node, to) { const n = Number(to); if (!Number.isFinite(n)) { node.textContent = String(to); return; } const t0 = performance.now(), d = 600; const step = now => { const k = Math.min(1, (now - t0) / d), e = 1 - (1 - k) ** 3; node.textContent = String(Math.round(n * e)); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+function weekday(ds) { const [y, m, d] = ds.split("-").map(Number); return WEEKDAYS[new Date(y, m - 1, d).getDay()]; }
+function tipFor(wrap) { let t = wrap.querySelector(".sp-tip"); if (!t) { t = el("div", "sp-tip"); t.hidden = true; wrap.append(t); } return t; }
+function showTip(wrap, target, html) { const t = tipFor(wrap); t.innerHTML = html; t.hidden = false; const wr = wrap.getBoundingClientRect(), r = target.getBoundingClientRect(); const x = r.left + r.width / 2 - wr.left; t.style.left = `${Math.min(Math.max(x, 70), wr.width - 70)}px`; }
+function hideTip(wrap) { const t = wrap.querySelector(".sp-tip"); if (t) t.hidden = true; }
+
 async function statsPage() {
-  showStage(false); progress.hidden = true; setMeta(todayNo, today);
-  const c = el("section", "card stats-page"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Statistika"), el("h2", null, `${GAME} statistikasi`));
-  const body = el("div", "sp-body"); body.append(el("p", "lead", "Yuklanmoqda...")); c.append(body); show(c); window.scrollTo(0, 0);
-  const [lv, st, sm] = await Promise.all([api("/live"), api(`/stats?date=${today}`), api("/summary")]);
-  if (!lv || !st || !sm) { body.replaceChildren(el("p", "lead", "Statistikani hozir yuklab bo'lmadi. Birozdan keyin qayta urinib ko'ring.")); return; }
-  const tiles = el("div", "sp-tiles"); [["Hozir onlayn", lv.online, true], ["Bugungi tashriflar", lv.today], ["Bugun o'ynaganlar", st.players], ["Bugungi o'rtacha", st.players ? `${grade(st.avg)} · ${st.avg}` : "–"]].forEach(([k, v, hot]) => { const d = el("div"); d.append(el("b", hot ? "hot" : null, String(v)), el("small", null, k)); tiles.append(d); });
-  const hist = el("div", "hist"); const mx = Math.max(...st.hist, 1); st.hist.forEach((n, i) => { const col = el("div", "hcol"); const bar = el("i"); bar.style.height = `${Math.max(4, n / mx * 100)}%`; col.append(bar, el("small", null, String(i * 10))); hist.append(col); });
-  const days = el("div", "sp-days"); const dm = Math.max(...sm.days.map(d => d.visitors), 1);
-  sm.days.forEach(d => { const col = el("div", "sp-day"); const v = el("i", "v"); v.style.height = `${Math.max(3, d.visitors / dm * 100)}%`; const p = el("i", "p"); p.style.height = `${Math.max(d.players ? 3 : 0, d.players / dm * 100)}%`; const bars = el("div", "bars"); bars.append(v, p); col.title = `${prettyDate(d.date)}: ${d.visitors} tashrif, ${d.players} o'yinchi`; col.append(bars, el("small", null, String(+d.date.slice(8)))); days.append(col); });
-  const legend = el("div", "sp-legend"); legend.innerHTML = '<span><i class="v"></i>tashriflar</span><span><i class="p"></i>o\'yinchilar</span>';
-  body.replaceChildren(tiles, el("h3", null, "Bugungi ballar taqsimoti"), st.players ? hist : el("p", "lead", "Bugun hali hech kim o'ynamadi."), el("h3", null, "So'nggi 14 kun"), days, legend, el("p", "sp-foot", `Jami ${sm.allVisitors} kishi saytga kirgan · ${st.allPlayers} kishi kamida bir marta o'ynagan`));
+  showStage(false); progress.hidden = true; setMeta(todayNo, today); clearInterval(spTimer);
+  const range = store.get("spRange", 14); let sel = today;
+  const c = el("section", "card stats-page"); c.append(backLink("Bosh sahifa", () => { clearInterval(spTimer); home(); }), el("div", "step", "Statistika"), el("h2", null, `${GAME} statistikasi`));
+  const liveRow = el("div", "sp-live"); liveRow.append(el("i"), el("b", null, "–"), document.createTextNode(" kishi hozir saytda"));
+  const seg = el("div", "seg-ctl"); [7, 14, 30].forEach(n => { const b = el("button", n === range ? "on" : null, `${n} kun`); b.type = "button"; b.addEventListener("click", () => { store.set("spRange", n); seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); loadDays(n); }); seg.append(b); });
+  const chartWrap = el("div", "sp-chart"); const days = el("div", "sp-days"); chartWrap.append(days);
+  const legend = el("div", "sp-legend"); legend.innerHTML = '<span><i class="v"></i>tashriflar</span><span><i class="p"></i>o\'yinchilar</span><span class="hint">kunni bosib tanlang</span>';
+  const dayBox = el("div", "sp-daybox"); const foot = el("p", "sp-foot");
+  const head = el("div", "sp-head"); head.append(liveRow, seg);
+  c.append(head, chartWrap, legend, dayBox, foot); show(c); window.scrollTo(0, 0);
+
+  const refreshLive = async () => { if (!document.contains(c)) { clearInterval(spTimer); return; } const lv = await api("/live"); if (lv) { liveRow.querySelector("b").textContent = String(lv.online); paintPulse(lv); } };
+  refreshLive(); spTimer = setInterval(refreshLive, 20000);
+
+  let summaryData = null;
+  async function loadDays(n) {
+    days.classList.add("loading"); const sm = await api(`/summary?days=${n}`); days.classList.remove("loading");
+    if (!sm) { days.replaceChildren(el("p", "lead", "Ma'lumotni yuklab bo'lmadi.")); return; }
+    summaryData = sm; days.style.gridTemplateColumns = `repeat(${sm.days.length}, minmax(0, 1fr))`;
+    const mx = Math.max(...sm.days.map(d => d.visitors), ...sm.days.map(d => d.players), 1);
+    days.replaceChildren(...sm.days.map((d, i) => { const col = el("button", "sp-day" + (d.date === sel ? " sel" : "")); col.type = "button"; col.dataset.date = d.date;
+      const bars = el("div", "bars"); const v = el("i", "v"), p = el("i", "p"); bars.append(v, p);
+      requestAnimationFrame(() => { v.style.height = `${Math.max(d.visitors ? 3 : 1, d.visitors / mx * 100)}%`; p.style.height = `${Math.max(d.players ? 3 : 0, d.players / mx * 100)}%`; });
+      const lab = el("small", null, (n <= 14 || i % 3 === 0 || d.date === today) ? String(+d.date.slice(8)) : ""); col.append(bars, lab);
+      const tip = () => showTip(chartWrap, col, `<b>${prettyDate(d.date)}, ${weekday(d.date)}</b><br>${d.visitors} tashrif · ${d.players} o'yinchi${d.avg != null ? ` · o'rtacha ${d.avg}` : ""}`);
+      col.addEventListener("pointerenter", tip); col.addEventListener("focus", tip); col.addEventListener("pointerleave", () => hideTip(chartWrap)); col.addEventListener("blur", () => hideTip(chartWrap));
+      col.addEventListener("click", () => { sel = d.date; days.querySelectorAll(".sp-day").forEach(x => x.classList.toggle("sel", x === col)); tip(); loadDay(); });
+      return col; }));
+    foot.textContent = `Jami ${sm.allVisitors} kishi saytga kirgan`;
+  }
+
+  async function loadDay() {
+    dayBox.classList.add("loading"); const st = await api(`/stats?date=${sel}`); dayBox.classList.remove("loading"); if (!st) return;
+    const mine = store.get("history", {})[sel];
+    const title = el("h3", null, `${prettyDate(sel)}, ${weekday(sel)}${sel === today ? " · bugun" : ""}`);
+    const tiles = el("div", "sp-tiles"); [["Tashriflar", st.visitors], ["O'yinchilar", st.players], ["O'rtacha ball", st.players ? st.avg : "–", st.players ? grade(st.avg) : null], ["Eng yuqori", st.best ?? "–", st.best != null ? grade(st.best) : null]].forEach(([k, v, g]) => { const d = el("div"); const b = el("b"); countUp(b, v); d.append(b); if (g) d.append(el("span", "g", g)); d.append(el("small", null, k)); tiles.append(d); });
+    const parts = [title, tiles];
+    if (st.players) {
+      const hWrap = el("div", "sp-chart"); const hist = el("div", "hist"); const mx = Math.max(...st.hist, 1); const myB = mine ? Math.min(Math.floor(mine.total / 10), 9) : -1;
+      st.hist.forEach((n, i) => { const col = el("button", "hcol" + (i === myB ? " me" : "")); col.type = "button"; const bar = el("i"); requestAnimationFrame(() => bar.style.height = `${Math.max(4, n / mx * 100)}%`); col.append(bar, el("small", null, String(i * 10)));
+        const tip = () => showTip(hWrap, col, `<b>${i * 10}–${i === 9 ? 100 : i * 10 + 9} ball</b><br>${n} kishi${i === myB ? " · siz shu yerdasiz" : ""}`);
+        col.addEventListener("pointerenter", tip); col.addEventListener("focus", tip); col.addEventListener("click", tip); col.addEventListener("pointerleave", () => hideTip(hWrap)); col.addEventListener("blur", () => hideTip(hWrap)); hist.append(col); });
+      hWrap.append(hist);
+      parts.push(el("h4", null, "Ballar taqsimoti"), hWrap, el("p", "sp-note", mine ? `Sizning natijangiz: ${mine.total} (${grade(mine.total)}), ajratilgan ustun` : "Ustunni bosing yoki ustiga olib boring"));
+      if (st.testAvg) { const rows = el("div", "sp-tests"); const lo = Math.min(...st.testAvg.map(x => x ?? 101));
+        TESTS.forEach((t, i) => { const v = st.testAvg[i]; if (v == null) return; const r = el("div", "sp-trow" + (v === lo ? " hard" : "")); const bar = el("div", "track"); const fill = el("i"); fill.style.background = `var(${t.color})`; requestAnimationFrame(() => fill.style.width = `${v}%`); bar.append(fill); const nm = el("span", "nm", t.name); if (v === lo) nm.append(el("em", null, "eng qiyin")); r.append(icon(t, 18), nm, bar, el("b", null, String(v))); rows.append(r); });
+        parts.push(el("h4", null, "Testlar bo'yicha o'rtacha"), rows); }
+    } else parts.push(el("p", "lead", sel === today ? "Bugun hali hech kim o'ynamadi. Birinchi bo'ling!" : "Bu kuni hech kim o'ynamagan."));
+    dayBox.replaceChildren(...parts);
+  }
+  await loadDays(range); loadDay();
 }
 function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
 async function playDaily(date = today) {
@@ -570,6 +647,7 @@ async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const
   const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Boshqa test tanlash", false, practiceMenu)); c.append(row, backLink("Bosh sahifa", home)); show(c); row.firstChild.focus(); }
 
 function home() {
+  clearInterval(spTimer);
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
   if (done) { renderResults(done); return; }
   const c = el("section", "home"); const d = new Date();
