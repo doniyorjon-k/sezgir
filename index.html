@@ -306,6 +306,8 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .rrow .tier { font-size: 15px; font-weight: 600; color: var(--muted); width: 28px; text-align: right; }
 .center-row { justify-content: center; }
 .btn.big { padding: 14px 32px; font-size: 15px; }
+.usul { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; vertical-align: middle; letter-spacing: .02em; }
+.usul-about { color: var(--ink); font-weight: 500; }
 .next { text-align: center; color: var(--muted); font-size: 14px; }
 .remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
 .remind:hover { text-decoration: underline; }
@@ -412,33 +414,40 @@ const TESTS = [
   rule: "20% xato = 50 ball, aniq son = 100 ball",
   gen(r) { const n = r.int(30, 80); const seeds = []; let guard = 0; while (seeds.length < n && guard++ < 20000) { const a = r.range(0, Math.PI * 2), d = Math.sqrt(r.next()) * 168; const x = 400 + Math.cos(a) * d, y = 250 + Math.sin(a) * d; if (seeds.every(s => (s.x - x) ** 2 + (s.y - y) ** 2 > 22 * 22)) seeds.push({ x, y, rot: r.range(0, Math.PI) }); } return { n: seeds.length, seeds }; },
   fruit(alpha = 1) { g.save(); g.globalAlpha = alpha; g.fillStyle = "#a0566a"; g.beginPath(); g.arc(400, 250, 205, 0, 7); g.fill(); g.fillStyle = "#f4e9e4"; g.beginPath(); g.arc(400, 250, 190, 0, 7); g.fill(); g.restore(); },
-  seeds(list, alpha = 1) { g.save(); g.globalAlpha = alpha; for (const s of list) { g.save(); g.translate(s.x, s.y); g.rotate(s.rot); g.fillStyle = css("--anor"); g.beginPath(); g.ellipse(0, 0, 9, 7, 0, 0, 7); g.fill(); g.fillStyle = "rgba(255,255,255,.45)"; g.beginPath(); g.ellipse(-3, -2.5, 3, 2, 0, 0, 7); g.fill(); g.restore(); } g.restore(); },
+  variants: { classic: { name: "Oddiy" }, suzuvchi: { name: "Suzuvchi", about: "Bugun donalar anor ichida suzib yuradi. 2 soniyada sonini chamalang." }, aralash: { name: "Aralash", about: "Bugun anorda sariq donalar ham bor. Faqat qizil donalarni sanang." } },
+  vary(r, p) { if (p.v === "suzuvchi") p.seeds.forEach(s => { s.ax = r.range(5, 11); s.ay = r.range(5, 11); s.w = r.range(1.6, 3.2); s.ph = r.range(0, 6.3); });
+    if (p.v === "aralash") { const k = Math.round(p.seeds.length * r.range(.28, .42)); const idx = p.seeds.map((_, i) => i); for (let i = 0; i < k; i++) { const j = i + Math.floor(r.next() * (idx.length - i)); [idx[i], idx[j]] = [idx[j], idx[i]]; p.seeds[idx[i]].decoy = true; } p.n = p.seeds.length - k; } return p; },
+  seeds(list, alpha = 1, t = 0) { g.save(); g.globalAlpha = alpha; for (const s of list) { g.save(); g.translate(s.x + (s.ax ? Math.cos(t * s.w + s.ph) * s.ax : 0), s.y + (s.ay ? Math.sin(t * s.w * .8 + s.ph) * s.ay : 0)); g.rotate(s.rot + (s.ax ? t * .6 : 0)); g.fillStyle = s.decoy ? css("--gold") : css("--anor"); g.beginPath(); g.ellipse(0, 0, 9, 7, 0, 0, 7); g.fill(); g.fillStyle = "rgba(255,255,255,.45)"; g.beginPath(); g.ellipse(-3, -2.5, 3, 2, 0, 0, 7); g.fill(); g.restore(); } g.restore(); },
   preview() { clear(); this.fruit(); g.save(); g.globalAlpha = .35; text("?", 400, 250, { size: 150, weight: 500, color: css("--anor") }); g.restore(); },
   async run(p) { live("Diqqat bilan qarang", "anor 2 soniya ko'rinadi"); await countdown(() => this.fruit());
-    const t0 = performance.now(); while (performance.now() - t0 < 2000) { clear(); this.fruit(); this.seeds(p.seeds); timerBar((performance.now() - t0) / 2000); await frame(); }
-    clear(); this.fruit(.5); text("Nechta dona edi?", 400, 200, { size: 40 }); redraw = () => { clear(); this.fruit(.5); text("Nechta dona edi?", 400, 200, { size: 40 }); };
+    const t0 = performance.now(); while (performance.now() - t0 < 2000) { clear(); this.fruit(); this.seeds(p.seeds, 1, (performance.now() - t0) / 1000); timerBar((performance.now() - t0) / 2000); await frame(); }
+    clear(); this.fruit(.5); const q = p.v === "aralash" ? "Nechta qizil dona edi?" : "Nechta dona edi?"; text(q, 400, 200, { size: 40 }); redraw = () => { clear(); this.fruit(.5); text(q, 400, 200, { size: 40 }); };
     live("Taxminiy sonni yozing", "sonni kiriting va «Javob»ni bosing");
     const guess = await new Promise(res => { const f = el("form", "row"); f.innerHTML = `<input id="countIn" class="count-in" type="number" inputmode="numeric" min="0" aria-label="Donalar soni" required><button class="btn primary" type="submit">Javob</button>`; screen.append(f); const i = f.querySelector("input"); i.focus(); f.addEventListener("submit", e => { e.preventDefault(); const v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) return; f.remove(); res(v); }); });
     const off = Math.abs(guess - p.n); return { err: off / p.n, human: off === 0 ? `Aynan ${p.n} ta edi. Zo'r!` : `Aslida ${p.n} ta edi, siz ${guess} dedingiz: ${off} ta (${Math.round(off / p.n * 100)}%) farq.`, guess }; },
-  reveal(p, r) { clear(); this.fruit(.35); this.seeds(p.seeds, .3); text(String(p.n), 400, 225, { size: 110, color: css("--anor") }); text("dona bor edi", 400, 300, { size: 26, weight: 500, color: css("--muted") }); pill(`siz: ${r.guess}`, 400, 380, { color: css("--accent") }); } },
+  reveal(p, r) { clear(); this.fruit(.35); this.seeds(p.seeds, .3); text(String(p.n), 400, 225, { size: 110, color: css("--anor") }); text(p.v === "aralash" ? "qizil dona bor edi" : "dona bor edi", 400, 300, { size: 26, weight: 500, color: css("--muted") }); pill(`siz: ${r.guess}`, 400, 380, { color: css("--accent") }); } },
 
 { id: "chillak", name: "Chillak", short: "Kuzatish", color: "--gold", sigma: 75,
   about: "Chillak uchadi va yarim yo'lda g'oyib bo'ladi. Qayerga tushishini ko'rsatasiz.",
   steps: ["Chap tomondan chillak havoga otiladi.", "Uchishning yarmida u ko'zdan yo'qoladi.", "Yerning qaysi nuqtasiga tushishini taxmin qilib, o'sha joyga bosing."],
   rule: "75 px xato = 50 ball (maydon eni 800 px)",
   gen(r) { const G = 900, x0 = r.range(60, 150), land = r.range(470, 760), vy = r.range(470, 600), T = 2 * vy / G; return { G, x0, land, vy, vx: (land - x0) / T, T, spin: r.range(6, 11) * (r.bool() ? 1 : -1) }; },
-  ground() { g.fillStyle = css("--line"); g.fillRect(0, 440, W, 60); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(0, 440); g.lineTo(W, 440); g.stroke(); },
-  pos(p, t) { return { x: p.x0 + p.vx * t, y: 440 - (p.vy * t - .5 * p.G * t * t) }; },
+  variants: { classic: { name: "Oddiy" }, devor: { name: "Devor", about: "Bugun o'ng tomonda devor bor. Chillak devorga urilib, orqaga qaytib tushadi. Qayerga tushishini ko'rsating." }, teskari: { name: "Teskari", about: "Bugun chillak o'ngdan chapga uchadi. Yarim yo'lda g'oyib bo'lgach, qayerga tushishini ko'rsating." } },
+  vary(r, p) { if (p.v === "teskari") { p.x0 = W - p.x0; p.vx = -p.vx; p.land = W - p.land; }
+    if (p.v === "devor") { p.wall = r.range(600, 690); const raw = p.wall + r.range(70, 260); p.vx = (raw - p.x0) / p.T; p.land = 2 * p.wall - raw; } return p; },
+  ground(p) { g.fillStyle = css("--line"); g.fillRect(0, 440, W, 60); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(0, 440); g.lineTo(W, 440); g.stroke();
+    if (p && p.wall) { g.fillStyle = css("--muted"); g.fillRect(p.wall, 70, 14, 370); g.fillStyle = css("--line"); for (let y = 90; y < 440; y += 34) g.fillRect(p.wall, y, 14, 3); } },
+  pos(p, t) { let x = p.x0 + p.vx * t; if (p.wall && x > p.wall) x = 2 * p.wall - x; return { x, y: 440 - (p.vy * t - .5 * p.G * t * t) }; },
   stick(x, y, rot, a = 1) { g.save(); g.globalAlpha = a; g.translate(x, y); g.rotate(rot); g.fillStyle = css("--gold"); g.beginPath(); g.roundRect(-18, -4, 36, 8, 4); g.fill(); g.restore(); },
   preview() { clear(); this.ground(); g.save(); g.setLineDash([4, 10]); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(110, 430); g.quadraticCurveTo(330, 60, 470, 250); g.stroke(); g.restore(); this.stick(110, 430, -.6); text("?", 640, 400, { size: 60, weight: 500, color: css("--accent") }); },
   run(p) { return new Promise(res => { live("Chillakni kuzating", "g'oyib bo'lgach, qayerga tushishini yerga bosib ko'rsating"); const t0 = performance.now() + 700, vis = .48 * p.T; let done = false;
-    const onDown = e => { if (done) return; const t = (performance.now() - t0) / 1000; if (t < vis) return; done = true; cv.removeEventListener("pointerdown", onDown); const x = clamp(toLogical(e).x, 0, W); const d = Math.abs(x - p.land); res({ err: d, human: d < 6 ? "Deyarli aynan tushgan joyga bosdingiz!" : `Chillak siz ko'rsatgan joydan ${Math.round(d)} px ${x < p.land ? "uzoqroqqa" : "yaqinroqqa"} tushdi.`, x }); };
+    const onDown = e => { if (done) return; const t = (performance.now() - t0) / 1000; if (t < vis) return; done = true; cv.removeEventListener("pointerdown", onDown); const x = clamp(toLogical(e).x, 0, W); const d = Math.abs(x - p.land); res({ err: d, human: d < 6 ? "Deyarli aynan tushgan joyga bosdingiz!" : `Chillak siz ko'rsatgan joydan ${Math.round(d)} px ${x < p.land ? "o'ngroqqa" : "chaproqqa"} tushdi.`, x }); };
     cv.addEventListener("pointerdown", onDown);
-    const loop = () => { if (done) return; const t = (performance.now() - t0) / 1000; clear(); this.ground();
+    const loop = () => { if (done) return; const t = (performance.now() - t0) / 1000; clear(); this.ground(p);
       if (t < 0) { this.stick(p.x0, 434, 0); text("tayyorlaning...", 400, 120, { size: 30, weight: 500, color: css("--muted") }); }
       else { const a = t < vis ? 1 : clamp(1 - (t - vis) / .15, 0, 1); if (a > 0) { const q = this.pos(p, Math.min(t, p.T)); this.stick(q.x, q.y, t * p.spin, a); } else { text("Qayerga tushadi?", 400, 110, { size: 38 }); text("yer chizig'iga bosing", 400, 160, { size: 26, weight: 500, color: css("--muted") }); } }
       requestAnimationFrame(loop); }; loop(); }); },
-  reveal(p, r) { clear(); this.ground(); g.save(); g.setLineDash([4, 8]); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); for (let i = 0; i <= 60; i++) { const q = this.pos(p, p.T * i / 60); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); } g.stroke(); g.restore();
+  reveal(p, r) { clear(); this.ground(p); g.save(); g.setLineDash([4, 8]); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); for (let i = 0; i <= 60; i++) { const q = this.pos(p, p.T * i / 60); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); } g.stroke(); g.restore();
     this.stick(p.land, 434, 0); g.fillStyle = css("--accent"); g.beginPath(); g.moveTo(r.x, 446); g.lineTo(r.x - 12, 466); g.lineTo(r.x + 12, 466); g.fill();
     g.strokeStyle = css("--ink"); g.lineWidth = 2; g.beginPath(); g.moveTo(Math.min(r.x, p.land), 482); g.lineTo(Math.max(r.x, p.land), 482); g.stroke();
     text(`${Math.round(r.err)} px`, 400, 90, { size: 44 }); legend([["chillak tushgan joy", css("--gold")], ["siz bosgan joy", css("--accent")]], 140); } },
@@ -449,13 +458,16 @@ const TESTS = [
   rule: "10% farq = 50 ball (aniq balandlik = 100 ball)",
   gen(r) { const h = r.range(150, 390); let start; do { start = r.range(130, 400); } while (Math.abs(start - h) < 70); return { h, start }; },
   ground() { g.fillStyle = css("--line"); g.fillRect(0, 450, W, 50); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(0, 450); g.lineTo(W, 450); g.stroke(); },
-  tower(x, h, color, alpha = 1) { const T = 450 - h; g.save(); g.globalAlpha = alpha; g.fillStyle = color;
-    g.beginPath(); g.moveTo(x - 30, 450); g.lineTo(x - 22, T + 50); g.lineTo(x + 22, T + 50); g.lineTo(x + 30, 450); g.closePath(); g.fill();
-    g.beginPath(); g.roundRect(x - 32, T + 40, 64, 10, 3); g.fill(); g.fillRect(x - 16, T + 17, 32, 24); g.beginPath(); g.arc(x, T + 17, 16, Math.PI, 0); g.fill();
-    g.globalAlpha = alpha * .25; g.fillStyle = "#fff"; for (let y = T + 80; y < 430; y += 46) { const w = 22 + 8 * (y - T - 50) / (400 - T); g.fillRect(x - w + 4, y, 2 * w - 8, 4); } g.fillRect(x - 6, T + 22, 12, 14); g.restore(); },
+  variants: { classic: { name: "Oddiy" }, supa: { name: "Supa", about: "Bugun minora baland supa ustida turadi. Supasiz, faqat minoraning o'z balandligini yerda quring." }, kontur: { name: "Kontur", about: "Bugun minora faqat chiziqlari bilan, ichi bo'sh holda ko'rinadi. Balandligini eslab, xuddi shunday minora quring." } },
+  vary(r, p) { if (p.v === "supa") p.base = Math.min(r.range(55, 115), 425 - p.h); return p; },
+  tower(x, h, color, alpha = 1, base = 0, outline = false) { const B = 450 - base, T = B - h; g.save(); g.globalAlpha = alpha; g.fillStyle = color; g.strokeStyle = color; g.lineWidth = 3; g.lineJoin = "round"; const paint = () => outline ? g.stroke() : g.fill();
+    g.beginPath(); g.moveTo(x - 30, B); g.lineTo(x - 22, T + 50); g.lineTo(x + 22, T + 50); g.lineTo(x + 30, B); g.closePath(); paint();
+    g.beginPath(); g.roundRect(x - 32, T + 40, 64, 10, 3); paint(); g.beginPath(); g.rect(x - 16, T + 17, 32, 23); paint(); g.beginPath(); g.arc(x, T + 17, 16, Math.PI, 0); outline ? g.stroke() : g.fill();
+    if (!outline) { g.globalAlpha = alpha * .25; g.fillStyle = "#fff"; for (let y = T + 80; y < B - 20; y += 46) { const w = 22 + 8 * (y - T - 50) / (B - 50 - T); g.fillRect(x - w + 4, y, 2 * w - 8, 4); } g.fillRect(x - 6, T + 22, 12, 14); } g.restore(); },
+  podium(x, hgt) { g.save(); g.fillStyle = css("--muted"); g.globalAlpha = .55; g.beginPath(); g.roundRect(x - 62, 450 - hgt, 124, hgt, [6, 6, 0, 0]); g.fill(); g.globalAlpha = .25; g.fillStyle = css("--ink"); for (let y = 450 - hgt + 18; y < 450; y += 22) g.fillRect(x - 62, y, 124, 2); g.restore(); },
   preview() { clear(); this.ground(); this.tower(250, 300, css("--accent")); this.tower(550, 210, css("--muted"), .35); text("?", 550, 180, { size: 60, weight: 500, color: css("--accent") }); },
   async run(p) { live("Balandlikni eslab qoling", "minora 1,5 soniya ko'rinadi"); await countdown(() => { this.ground(); });
-    const t0 = performance.now(); while (performance.now() - t0 < 1500) { clear(); this.ground(); this.tower(230, p.h, css("--accent")); timerBar((performance.now() - t0) / 1500); await frame(); }
+    const t0 = performance.now(); while (performance.now() - t0 < 1500) { clear(); this.ground(); if (p.base) this.podium(230, p.base); this.tower(230, p.h, css("--accent"), 1, p.base || 0, p.v === "kontur"); timerBar((performance.now() - t0) / 1500); await frame(); }
     live("Endi o'sha balandlikni quring", "minorani yuqoriga-pastga suring, so'ng «Shu balandlik»ni bosing");
     let h = p.start, drag = false;
     const draw = () => { clear(); this.ground(); g.save(); g.setLineDash([6, 8]); g.strokeStyle = css("--line"); g.lineWidth = 2; g.strokeRect(200, 60, 60, 390); g.restore(); text("?", 230, 300, { size: 48, weight: 500, color: css("--muted") }); this.tower(570, h, css("--ink"), .85); text("↕", 650, 450 - h + 20, { size: 34, weight: 500, color: css("--muted") }); }; redraw = draw;
@@ -473,11 +485,13 @@ const TESTS = [
   steps: ["Ovozni yoqing. Doira 6 marta bir xil tezlikda uriladi: unga qo'shilib bosing.", "6-zarbdan keyin doira jim bo'ladi.", "O'sha tezlikni ushlab, yana 8 marta o'zingiz bosing. Bosish: doiraga teging yoki Probel tugmasi."],
   rule: "har zarbda o'rtacha 100 ms xato = 50 ball",
   gen(r) { const bpm = r.int(72, 116); return { bpm, T: 60000 / bpm }; },
+  variants: { classic: { name: "Oddiy" }, jim: { name: "Jim", about: "Bugun ovoz yo'q: doira faqat ko'zga ko'rinib uriladi. 6 zarbni kuzating, keyin o'sha tezlikda 8 marta o'zingiz bosing." }, korlar: { name: "Ko'rmasdan", about: "Bugun doira qimirlamaydi, faqat ovozi eshitiladi. Ovozni yoqing, 6 zarbni tinglang, keyin 8 marta o'zingiz davom eting." } },
+  vary(r, p) { return p; },
   drum(R, glow = 0) { g.fillStyle = "#d8c3a0"; g.beginPath(); g.arc(400, 215, R + 12, 0, 7); g.fill(); g.fillStyle = "#f3e9d6"; g.beginPath(); g.arc(400, 215, R, 0, 7); g.fill(); g.fillStyle = "#b49a73"; for (let i = 0; i < 24; i++) { const an = i / 24 * Math.PI * 2; g.beginPath(); g.arc(400 + Math.cos(an) * (R + 6), 215 + Math.sin(an) * (R + 6), 3, 0, 7); g.fill(); } if (glow) { g.save(); g.globalAlpha = glow * .35; g.fillStyle = css("--accent"); g.beginPath(); g.arc(400, 215, R, 0, 7); g.fill(); g.restore(); } },
   dots(lead, solo, leadDone, soloDone) { const all = lead + solo, gap = 40, x0 = 400 - (all - 1) * gap / 2 - 10; for (let i = 0; i < all; i++) { const isLead = i < lead, x = x0 + i * gap + (isLead ? 0 : 20), filled = isLead ? i < leadDone : i - lead < soloDone; g.beginPath(); g.arc(x, 420, 9, 0, 7); if (filled) { g.fillStyle = isLead ? css("--muted") : css("--good"); g.fill(); } else { g.strokeStyle = css("--line"); g.lineWidth = 3; g.stroke(); } } text("doira", x0 + (lead - 1) * gap / 2, 458, { size: 18, weight: 500, color: css("--muted") }); text("siz", x0 + lead * gap + 20 + (solo - 1) * gap / 2, 458, { size: 18, weight: 500, color: css("--muted") }); },
   preview() { clear(); this.drum(120); this.dots(6, 8, 0, 0); },
   run(p) { return new Promise(res => { const a = audio(); const lead = 6, solo = 8; const start = performance.now() + 1500; const beats = Array.from({ length: lead }, (_, i) => start + i * p.T);
-    if (a) { const off = a.currentTime - performance.now() / 1000; beats.forEach(b => doira(b / 1000 + off)); }
+    if (a && p.v !== "jim") { const off = a.currentTime - performance.now() / 1000; beats.forEach(b => doira(b / 1000 + off)); }
     const last = beats[lead - 1]; const taps = []; let flash = -1e9, done = false, phase = "";
     const tap = () => { if (done) return; const now = performance.now(); flash = now; if (now > last + p.T * .45) { taps.push(now); if (taps.length >= solo) finish(); } };
     const onKey = e => { if (e.code === "Space" && !e.repeat) { e.preventDefault(); tap(); } };
@@ -486,10 +500,10 @@ const TESTS = [
       let errs = taps.map((t, i) => t - (last + (i + 1) * p.T)); const shift = Math.round(errs.reduce((s, x) => s + x, 0) / errs.length / p.T); errs = errs.map(x => x - shift * p.T);
       const rms = Math.sqrt(errs.reduce((s, x) => s + x * x, 0) / errs.length), mean = errs.reduce((s, x) => s + x, 0) / errs.length;
       res({ err: rms, human: `Har zarbda o'rtacha ${Math.round(rms)} ms xato. ${mean > 20 ? "Biroz sekinlashdingiz." : mean < -20 ? "Biroz shoshildingiz." : "Tempni yaxshi ushladingiz."}`, errs }); };
-    const loop = () => { if (done) return; const now = performance.now(); clear(); let pulse = 0; for (const b of beats) if (now >= b && now - b < 180) pulse = 1 - (now - b) / 180; const tp = now - flash < 140 ? 1 - (now - flash) / 140 : 0;
-      this.drum(118 + pulse * 14 + tp * 6, tp); const leadDone = beats.filter(b => now >= b).length; this.dots(lead, solo, leadDone, taps.length);
+    const loop = () => { if (done) return; const now = performance.now(); clear(); let pulse = 0; if (p.v !== "korlar") for (const b of beats) if (now >= b && now - b < 180) pulse = 1 - (now - b) / 180; const tp = now - flash < 140 ? 1 - (now - flash) / 140 : 0;
+      this.drum(118 + pulse * 14 + tp * 6, tp); const leadDone = p.v === "korlar" ? 0 : beats.filter(b => now >= b).length; this.dots(lead, solo, leadDone, taps.length);
       const ph = now < start ? "wait" : now < last + p.T * .45 ? "lead" : "solo";
-      if (ph !== phase) { phase = ph; if (ph === "wait") live("Tayyorlaning...", "ovoz yoqilganini tekshiring"); else if (ph === "lead") live("Doira bilan birga bosing", "doiraga teging yoki Probel"); else live("Endi o'zingiz davom eting", "o'sha tezlikda 8 marta bosing"); }
+      if (ph !== phase) { phase = ph; if (ph === "wait") live("Tayyorlaning...", p.v === "jim" ? "bugun ovoz bo'lmaydi, doiraga qarang" : "ovoz yoqilganini tekshiring"); else if (ph === "lead") live("Doira bilan birga bosing", "doiraga teging yoki Probel"); else live("Endi o'zingiz davom eting", "o'sha tezlikda 8 marta bosing"); }
       requestAnimationFrame(loop); }; loop(); }); },
   reveal(p, r) { clear(); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(110, 260); g.lineTo(720, 260); g.stroke(); text("erta", 60, 170, { size: 22, weight: 500, color: css("--muted") }); text("kech", 60, 350, { size: 22, weight: 500, color: css("--muted") });
     r.errs.forEach((e, i) => { const x = 140 + i * 80; g.strokeStyle = css("--ink"); g.lineWidth = 3; g.beginPath(); g.moveTo(x, 244); g.lineTo(x, 276); g.stroke(); g.fillStyle = css("--good"); g.beginPath(); g.arc(x, 260 + clamp(e / 2.5, -140, 140), 10, 0, 7); g.fill(); });
@@ -500,23 +514,37 @@ const TESTS = [
   steps: ["Ekranda qancha ulush kesish kerakligi yoziladi, masalan 3/8.", "Kesish tepadagi chiziqdan boshlanadi va soat mili bo'ylab boradi.", "Nonni bosib turing, pichoqni suring va kerakli joyda qo'yib yuboring."],
   rule: "5% farq = 50 ball (butun non = 100%)",
   gen(r) { const fr = [[1, 3], [2, 3], [3, 8], [5, 8], [1, 6], [5, 6], [2, 5], [3, 5], [1, 5], [4, 5], [5, 12], [7, 12], [3, 10], [7, 10]]; if (r.next() < .4) { let pct; do { pct = r.int(12, 88); } while (pct % 25 === 0); return { f: pct / 100, label: `${pct}%` }; } const [a, b] = r.pick(fr); return { f: a / b, label: `${a}/${b}` }; },
-  bread(sel, truth) { const cx = 400, cy = 275, R = 165; g.fillStyle = "#cfa06a"; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.fillStyle = "#ecd0a2"; g.beginPath(); g.arc(cx, cy, R - 28, 0, 7); g.fill(); g.fillStyle = "#dfb57e"; g.beginPath(); g.arc(cx, cy, R - 58, 0, 7); g.fill();
+  variants: { classic: { name: "Oddiy" }, burilgan: { name: "Burilgan", about: "Bugun kesish chizig'i tepada emas, boshqa joyda turibdi. O'sha chiziqdan boshlab, soat mili bo'ylab kerakli ulushni kesing." }, qoldir: { name: "Qoldiring", about: "Bugun teskarisi: nonning so'ralgan qismi qolishi kerak. Kesib olingan bo'lak qolgan qismdan qolgani bo'ladi." } },
+  vary(r, p) { if (p.v === "burilgan") p.a0 = r.pick([.6, .9, 1.3, 2.2, 2.6, 3.1, 3.6, 4.1, 4.6, 5.3]); return p; },
+  bread(sel, truth, a0 = 0) { const cx = 400, cy = 275, R = 165; g.fillStyle = "#cfa06a"; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.fillStyle = "#ecd0a2"; g.beginPath(); g.arc(cx, cy, R - 28, 0, 7); g.fill(); g.fillStyle = "#dfb57e"; g.beginPath(); g.arc(cx, cy, R - 58, 0, 7); g.fill();
     g.fillStyle = "#b98a52"; for (let ring = 0; ring < 3; ring++) { const rr = 20 + ring * 26, k = 6 + ring * 7; for (let i = 0; i < k; i++) { const an = i / k * Math.PI * 2; g.beginPath(); g.arc(cx + Math.cos(an) * rr, cy + Math.sin(an) * rr, 2.6, 0, 7); g.fill(); } }
-    const ang = f => -Math.PI / 2 + f * Math.PI * 2;
+    const ang = f => -Math.PI / 2 + a0 + f * Math.PI * 2;
     if (sel != null) { g.save(); g.fillStyle = css("--accent"); g.globalAlpha = .25; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R + 4, ang(0), ang(sel)); g.closePath(); g.fill(); g.restore(); g.strokeStyle = css("--ink"); g.lineWidth = 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang(sel)) * (R + 20), cy + Math.sin(ang(sel)) * (R + 20)); g.stroke(); }
     if (truth != null) { g.save(); g.setLineDash([8, 6]); g.strokeStyle = css("--anor"); g.lineWidth = 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang(truth)) * (R + 20), cy + Math.sin(ang(truth)) * (R + 20)); g.stroke(); g.restore(); }
-    g.strokeStyle = css("--ink"); g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - R - 22); g.stroke();
-    g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 34, -Math.PI / 2 + .08, -Math.PI / 2 + .55); g.stroke(); const ea = -Math.PI / 2 + .55; g.fillStyle = css("--muted"); g.beginPath(); g.moveTo(cx + Math.cos(ea) * (R + 34), cy + Math.sin(ea) * (R + 34)); g.lineTo(cx + Math.cos(ea - .07) * (R + 26), cy + Math.sin(ea - .07) * (R + 26)); g.lineTo(cx + Math.cos(ea - .07) * (R + 42), cy + Math.sin(ea - .07) * (R + 42)); g.fill(); },
+    g.strokeStyle = css("--ink"); g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang(0)) * (R + 22), cy + Math.sin(ang(0)) * (R + 22)); g.stroke();
+    g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 34, ang(0) + .08, ang(0) + .55); g.stroke(); const ea = ang(0) + .55; g.fillStyle = css("--muted"); g.beginPath(); g.moveTo(cx + Math.cos(ea) * (R + 34), cy + Math.sin(ea) * (R + 34)); g.lineTo(cx + Math.cos(ea - .07) * (R + 26), cy + Math.sin(ea - .07) * (R + 26)); g.lineTo(cx + Math.cos(ea - .07) * (R + 42), cy + Math.sin(ea - .07) * (R + 42)); g.fill(); },
   preview() { clear(); this.bread(.3); },
-  run(p) { return new Promise(res => { live(`Nonning ${p.label} qismini kesing`, "bosib turing, pichoqni soat mili bo'ylab suring va qo'yib yuboring"); let sel = null, drag = false, prev = 0; const cx = 400, cy = 275;
-    const fracOf = e => { const q = toLogical(e); let a = Math.atan2(q.y - cy, q.x - cx) + Math.PI / 2; if (a < 0) a += Math.PI * 2; return a / (Math.PI * 2); };
-    const draw = () => { clear(); this.bread(sel); pill(`${p.label} qismini kesing`, 400, 50, { size: 30 }); }; redraw = draw;
+  run(p) { return new Promise(res => { const keep = p.v === "qoldir", a0 = p.a0 || 0, task = keep ? `${p.label} qismi qolsin` : `${p.label} qismini kesing`;
+    live(keep ? `Nonning ${p.label} qismi qolsin` : `Nonning ${p.label} qismini kesing`, "bosib turing, pichoqni soat mili bo'ylab suring va qo'yib yuboring"); let sel = null, drag = false, prev = 0; const cx = 400, cy = 275;
+    const fracOf = e => { const q = toLogical(e); let a = Math.atan2(q.y - cy, q.x - cx) + Math.PI / 2 - a0; a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); return a / (Math.PI * 2); };
+    const draw = () => { clear(); this.bread(sel, null, a0); pill(task, 400, 50, { size: 30 }); }; redraw = draw;
     const down = e => { drag = true; cv.setPointerCapture(e.pointerId); sel = fracOf(e); prev = sel; draw(); };
     const move = e => { if (!drag) return; let f = fracOf(e); if (prev > .85 && f < .15) f = 1; if (prev < .15 && f > .85) f = 0.0001; sel = f; prev = f; draw(); };
-    const up = () => { if (!drag) return; drag = false; cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerup", up); const d = Math.abs(sel - p.f); res({ err: d, human: d < .005 ? "Deyarli aynan kesdingiz!" : `Kerak edi ${p.label} (${(p.f * 100).toFixed(1)}%), siz ${(sel * 100).toFixed(1)}% kesdingiz.`, sel }); };
+    const up = () => { if (!drag) return; drag = false; cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerup", up); const got = keep ? 1 - sel : sel, d = Math.abs(got - p.f); res({ err: d, human: d < .005 ? "Deyarli aynan kesdingiz!" : keep ? `${p.label} (${(p.f * 100).toFixed(1)}%) qolishi kerak edi, sizda ${(got * 100).toFixed(1)}% qoldi.` : `Kerak edi ${p.label} (${(p.f * 100).toFixed(1)}%), siz ${(sel * 100).toFixed(1)}% kesdingiz.`, sel }); };
     cv.addEventListener("pointerdown", down); cv.addEventListener("pointermove", move); cv.addEventListener("pointerup", up); draw(); }); },
-  reveal(p, r) { clear(); this.bread(r.sel, p.f); text(`${(r.err * 100).toFixed(1)}% farq`, 400, 50, { size: 40 }); legend([["kerakli kesim", css("--anor")], ["sizning kesimingiz", css("--ink")]], 478); } }
+  reveal(p, r) { clear(); this.bread(r.sel, p.v === "qoldir" ? 1 - p.f : p.f, p.a0 || 0); text(`${(r.err * 100).toFixed(1)}% farq`, 400, 50, { size: 40 }); legend([["kerakli kesim", css("--anor")], ["sizning kesimingiz", css("--ink")]], 478); } }
 ];
+
+// ---------- daily variants: each test has 3 ways to play, picked per day from its own seed ----------
+const VARIANTS_FROM = "2026-11-20"; // earlier puzzles stay classic so archived days replay the same
+function variantKeys(t) { return Object.keys(t.variants || { classic: 1 }); }
+function withVariant(t, p, seed, forced) { const r = rng(seed); const keys = variantKeys(t); p.v = forced || r.pick(keys); return t.vary ? t.vary(r, p) : p; }
+function dailyParams(date) { const R = rng("sezgir-" + date); const params = TESTS.map(t => t.gen(R)); if (date < VARIANTS_FROM) return params.map(p => (p.v = "classic", p));
+  // every day 3 or 4 of the 5 tests get a new way to play; the rest stay classic
+  const D = rng("usul-" + date), order = TESTS.map((_, i) => i); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(D.next() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const twisted = new Set(order.slice(0, D.next() < .5 ? 3 : 4));
+  return params.map((p, i) => { const t = TESTS[i], seed = `usul-${date}-${t.id}`; if (!twisted.has(i)) return withVariant(t, p, seed, "classic"); const keys = variantKeys(t).filter(k => k !== "classic"); return withVariant(t, p, seed, keys[Math.floor(rng(seed + "-k").next() * keys.length)]); }); }
+function variantName(t, v) { return (t.variants && t.variants[v] && t.variants[v].name) || "Oddiy"; }
 
 // ---------- flow ----------
 const today = ymd(), todayNo = puzzleNo(today);
@@ -531,9 +559,12 @@ function showStage(on) { stageBox.hidden = !on; if (on) { fit(); $("#statbar").h
 
 function renderProgress(results, cur) { progress.replaceChildren(); TESTS.forEach((t, i) => { const r = results[i]; const s = el("div", "seg" + (r ? " done" : i === cur ? " cur" : "")); s.append(el("i")); const lab = el("span"); if (r) { lab.append(document.createTextNode(t.short + " ")); lab.append(el("b", null, String(r.score))); } else lab.textContent = `${i + 1}. ${t.short}`; s.append(lab); progress.append(s); }); }
 
-function intro(t, idx, total) { return new Promise(res => { showStage(false); hud.replaceChildren(); redraw = null;
+function intro(t, idx, total, p) { return new Promise(res => { showStage(false); hud.replaceChildren(); redraw = null;
   const c = el("section", "card intro-card"); const h = el("h2"); h.append(icon(t, 28), document.createTextNode(t.name));
-  if (total === 1) c.append(backLink("Mashqlar", practiceMenu)); c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h, el("p", "about", t.about), el("div", "rule", "Baholash: " + t.rule));
+  const vv = p && p.v && p.v !== "classic" && t.variants && t.variants[p.v];
+  if (vv) h.append(el("span", "usul", vv.name));
+  if (total === 1) c.append(backLink("Mashqlar", practiceMenu)); c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h);
+  if (vv) c.append(el("p", "about usul-about", vv.about)); if (!vv) c.append(el("p", "about", t.about)); c.append(el("div", "rule", "Baholash: " + t.rule));
   const more = el("details", "more"); more.append(el("summary", null, "Batafsil yo'riq")); const ol = el("ol", "steps"); t.steps.forEach(x => ol.append(el("li", null, x))); more.append(ol);
   const b = btn("Tayyorman", true, () => { audio(); res(); }); b.classList.add("big"); const row = el("div", "row center-row"); row.append(b); c.append(row, more); show(c); b.focus(); }); }
 
@@ -628,9 +659,9 @@ function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}
 async function playDaily(date = today) {
   if (typeof date !== "string") date = today;
   const no = puzzleNo(date); setMeta(no, date);
-  const R = rng("sezgir-" + date); const params = TESTS.map(t => t.gen(R)); const results = [];
+  const params = dailyParams(date); const results = [];
   progress.hidden = false;
-  for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length); const { r, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s, human: r.human }); renderProgress(results, i + 1); await verdict(t, r, s, i < TESTS.length - 1 ? `Keyingi test: ${TESTS[i + 1].name}` : "Umumiy natija"); }
+  for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length, params[i]); const { r, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s, human: r.human, v: params[i].v }); renderProgress(results, i + 1); await verdict(t, r, s, i < TESTS.length - 1 ? `Keyingi test: ${TESTS[i + 1].name}` : "Umumiy natija"); }
   const total = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
   const rec = { date, no, total, results, late: date !== today };
   const hist = store.get("history", {}); hist[date] = rec; store.set("history", hist);
@@ -730,7 +761,7 @@ function renderResults(rec) {
   hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num, el("p", null, "beshta testning o'rtachasi"), el("p", "scale", GRADE_SCALE)); c.append(hero);
   if (API && rec.date === today) { const g = el("div", "global"); g.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); c.append(g); globalBlock(g, rec); }
   const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
-  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
+  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); const nm = el("div", "nm", t.name); if (r.v && r.v !== "classic" && t.variants) nm.append(el("span", "usul", variantName(t, r.v))); mid.append(nm, el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
   const v = rec.date === today ? activeVs() : null; if (v) c.append(vsBlock(rec, v));
   const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : (inTg() && BOT ? botLink(null) : SITE);
   const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
@@ -763,7 +794,7 @@ function archive() {
 function selectPre(pre) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
 function practiceRow() { const p = el("div", "pick"); for (const t of TESTS) { const b = el("button", "pick-row"); b.type = "button"; const tile = el("span", "tile"); tile.append(icon(t, 22)); const mid = el("span"); mid.append(el("b", null, t.name), el("small", null, t.about)); const chev = el("span", "chev"); chev.innerHTML = ARROW_R; b.append(tile, mid, chev); b.addEventListener("click", () => practice(t)); p.append(b); } return p; }
-async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const { r, s } = await runTest(t, t.gen(rng("mashq-" + Math.random())));
+async function practice(t) { progress.hidden = true; const seed = "mashq-" + Math.random(); const p = withVariant(t, t.gen(rng(seed)), seed + "-usul"); await intro(t, 0, 1, p); const { r, s } = await runTest(t, p);
   const c = el("section", "panel"); const v = el("div", "verdict"); v.append(el("b", null, String(s)), el("span", "chip", `${grade(s)} · ${title(s)}`), el("div", "what", r.human)); c.append(el("div", "step", "mashq · hisobga olinmaydi"), v);
   const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Boshqa test tanlash", false, practiceMenu)); c.append(row, backLink("Bosh sahifa", home)); show(c); row.firstChild.focus(); }
 
@@ -773,9 +804,9 @@ function howTo(focusId) {
     el("p", "lead", "Har kuni hamma uchun bir xil beshta qisqa test. Har bir test 0 dan 100 gacha ball beradi, umumiy natija ularning o'rtachasi. Butun o'yin taxminan ikki daqiqa."));
   const flow = el("ol", "hw-flow"); [["O'ynash", "Bosh sahifadagi «O'ynash» tugmasini bosing."], ["Har bir test oldidan", "Qisqa tushuntirish chiqadi. «Tayyorman» bosilgach 3-2-1 sanog'i boshlanadi."], ["Natija", "Har testdan keyin ballingiz ko'rinadi, 3 soniyadan keyin keyingisi boshlanadi."], ["Yakun", "Umumiy baho (A+ dan F gacha) va natijani do'stlarga ulashish."]].forEach(([h, p]) => { const li = el("li"); li.append(el("b", null, h), el("span", null, p)); flow.append(li); });
   const tests = el("div", "hw-tests"); let focusEl = null;
-  TESTS.forEach((t, i) => { const r = el("div", "hw-test"); r.id = `hw-${t.id}`; const tile = el("span", "tile"); tile.append(icon(t, 24)); const mid = el("div"); mid.append(el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about), el("small", null, "Baholash: " + t.rule)); const tr = btn("Sinab ko'rish", false, () => practice(t)); tr.classList.add("sm"); r.append(tile, mid, tr); tests.append(r); if (t.id === focusId) { r.classList.add("focus"); focusEl = r; } });
+  TESTS.forEach((t, i) => { const r = el("div", "hw-test"); r.id = `hw-${t.id}`; const tile = el("span", "tile"); tile.append(icon(t, 24)); const mid = el("div"); mid.append(el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about), el("small", null, "Usullar: " + variantKeys(t).map(k => variantName(t, k)).join(", ") + " · Baholash: " + t.rule)); const tr = btn("Sinab ko'rish", false, () => practice(t)); tr.classList.add("sm"); r.append(tile, mid, tr); tests.append(r); if (t.id === focusId) { r.classList.add("focus"); focusEl = r; } });
   const grades = el("p", "hw-grades", GRADE_SCALE);
-  const tips = el("ul", "hw-tips"); ["Yangi jumboq har kuni yarim tunda chiqadi. Hamma bir xil topshiriqni o'ynaydi.", "Kuniga bir marta o'ynaladi. «Mashq qilish» natijalari hisobga olinmaydi.", "O'tkazib yuborgan kunlaringizni «Arxiv»dan o'ynashingiz mumkin.", "Doira testi uchun ovozni yoqing."].forEach(x => tips.append(el("li", null, x)));
+  const tips = el("ul", "hw-tips"); ["Yangi jumboq har kuni yarim tunda chiqadi. Hamma bir xil topshiriqni o'ynaydi.", "Har bir testning 3 xil usuli bor: qaysi biri chiqishi har kuni o'zgaradi. Bugungi usul test oldidan aytiladi.", "Kuniga bir marta o'ynaladi. «Mashq qilish» natijalari hisobga olinmaydi.", "O'tkazib yuborgan kunlaringizni «Arxiv»dan o'ynashingiz mumkin.", "Doira testi uchun ovozni yoqing."].forEach(x => tips.append(el("li", null, x)));
   const row = el("div", "row center-row"); const doneToday = store.get("history", {})[today];
   row.append(btn(doneToday ? "Bugungi natijam" : "O'ynash", true, () => doneToday ? home() : playDaily(today)), btn("Mashq qilish", false, practiceMenu));
   c.append(el("h4", null, "O'yin tartibi"), flow, el("h4", null, "Beshta test"), tests, el("h4", null, "Baholar"), grades, el("h4", null, "Bilish foydali"), tips, row);
