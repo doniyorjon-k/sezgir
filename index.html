@@ -298,6 +298,8 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .center-row { justify-content: center; }
 .btn.big { padding: 14px 32px; font-size: 15px; }
 .next { text-align: center; color: var(--muted); font-size: 14px; }
+.remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
+.remind:hover { text-decoration: underline; }
 .radar { width: 100%; max-width: 360px; margin: 0 auto; display: block; }
 .radar text { font: 500 12px var(--font-body); fill: var(--muted); }
 </style>
@@ -320,6 +322,7 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 <script>
 (() => {
 const GAME = "Sezgir";
+const BOT = ""; // Telegram bot username (no @); empty = reminder link hidden
 const API = "https://sezgir-api.sezgir-uz.workers.dev"; // stats server (Cloudflare Worker) base URL; empty = global stats off
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
@@ -638,7 +641,9 @@ function shareText(rec) { return tgText(rec, rec.date === today); }
 const SITE = "https://sezgir.github.io/";
 // ---------- challenge link: ?vs=<no>.<s1>.<s2>.<s3>.<s4>.<s5>&n=<name> ----------
 function challengeUrl(rec) { const u = new URL(SITE); u.searchParams.set("vs", [rec.no, ...rec.results.map(r => r.score)].join(".")); const n = store.get("name", ""); if (n) u.searchParams.set("n", n); return u.toString(); }
-function readChallenge() { try { const q = new URLSearchParams(location.search), v = q.get("vs"); if (!v) return; const a = v.split(".").map(Number);
+function readChallenge() { try { const q = new URLSearchParams(location.search), v = q.get("vs"), cid = q.get("cid");
+  if (cid && /^[a-z0-9]{16,40}$/.test(cid)) store.set("client", cid); // opened from the Telegram bot: same player id as the bot's reminders
+  if (!v) { if (cid) history.replaceState(null, "", location.pathname); return; } const a = v.split(".").map(Number);
   if (a.length === 6 && a.every(x => Number.isInteger(x) && x >= 0) && a.slice(1).every(x => x <= 100) && a[0] === todayNo) { const name = (q.get("n") || "").replace(/[<>]/g, "").trim().slice(0, 24) || "Do'stingiz"; store.set("vs", { no: a[0], scores: a.slice(1), name }); }
   history.replaceState(null, "", location.pathname); } catch {} }
 function activeVs() { const v = store.get("vs", null); return v && v.no === todayNo ? v : null; }
@@ -721,7 +726,8 @@ function renderResults(rec) {
   const cp = btn("Matnni nusxalash", false, () => { const txt = `${shareText(rec)}\n${link()}`; const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } });
   const s1 = el("div", "row center-row"); s1.append(img); const s2 = el("div", "row center-row"); s2.append(tg, cp); sb.append(s1, s2); c.append(sb);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
-  if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`)); }
+  if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`));
+    if (BOT) { const a = el("a", "remind"); a.href = `https://t.me/${BOT}?start=${clientId()}`; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>'; a.append("Har kuni Telegram'da eslatib turaylikmi?"); c.append(a); } }
   else c.append(el("p", "next", `Arxivdagi #${rec.no} (${prettyDate(rec.date)}). Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
   show(c); window.scrollTo(0, 0);
 }
