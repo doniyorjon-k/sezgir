@@ -75,6 +75,18 @@ p { margin: 0; }
 .btn.primary:hover { filter: brightness(1.05); }
 .btn.tg { }
 .btn:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 0; margin: -6px 0 -4px; color: var(--muted); font: 500 14px var(--font-body); cursor: pointer; }
+.back:hover { color: var(--ink); }
+.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.back svg { display: block; }
+.pick { display: flex; flex-direction: column; }
+.pick-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 16px; gap: 14px; align-items: center; padding: 14px 4px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: 400 15px var(--font-body); text-align: left; cursor: pointer; }
+.pick-row:hover { background: var(--bg); }
+.pick-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pick-row .tile { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); display: grid; place-items: center; }
+.pick-row b { font-weight: 500; display: block; }
+.pick-row small { color: var(--muted); font-size: 13px; display: block; line-height: 1.45; }
+.pick-row .chev { color: var(--muted); }
 .step { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
 .score-big { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .score-big b { font-size: 56px; font-weight: 600; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
@@ -91,8 +103,6 @@ p { margin: 0; }
 .stats small { color: var(--muted); font-size: 12px; }
 pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radius: 10px; padding: 12px 14px; font: 14px/1.6 var(--font-body); }
 .count-in { font: 600 20px var(--font-body); width: 110px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center; }
-.practice { display: flex; gap: 8px; flex-wrap: wrap; }
-.practice .btn { padding: 8px 14px; font-size: 13px; }
 #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 500; font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
@@ -205,6 +215,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const frame = () => new Promise(r => requestAnimationFrame(r));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const ARROW_L = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+const ARROW_R = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+// "go back" is a quiet text link at the top of a screen, never a button among the actions
+function backLink(label, onClick) { const b = el("button", "back"); b.type = "button"; b.innerHTML = ARROW_L; b.append(label); b.addEventListener("click", onClick); return b; }
 function btn(label, primary, onClick) { const b = el("button", primary ? "btn primary" : "btn", label); b.type = "button"; b.addEventListener("click", onClick); return b; }
 function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rng(seed) { let a = hash(String(seed)); const f = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -386,7 +400,7 @@ function renderProgress(results, cur) { progress.replaceChildren(); TESTS.forEac
 
 function intro(t, idx, total) { return new Promise(res => { showStage(false); hud.replaceChildren(); redraw = null;
   const c = el("section", "card intro-card"); const h = el("h2"); h.append(icon(t, 28), document.createTextNode(t.name));
-  c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h, el("p", "about", t.about), el("div", "rule", "Baholash: " + t.rule));
+  if (total === 1) c.append(backLink("Mashqlar", practiceMenu)); c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h, el("p", "about", t.about), el("div", "rule", "Baholash: " + t.rule));
   const more = el("details", "more"); more.append(el("summary", null, "Batafsil yo'riq")); const ol = el("ol", "steps"); t.steps.forEach(x => ol.append(el("li", null, x))); more.append(ol);
   const b = btn("Tayyorman", true, () => { audio(); res(); }); b.classList.add("big"); const row = el("div", "row center-row"); row.append(b); c.append(row, more); show(c); b.focus(); }); }
 
@@ -450,30 +464,30 @@ function renderResults(rec) {
   const txt = shareText(rec);
   const share = btn("Natijani ulashish", true, () => { const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } }); share.classList.add("big");
   const tg = el("a", "btn", "Telegram'da ulashish"); tg.href = "https://t.me/share/url?url=" + encodeURIComponent(location.href.split("#")[0]) + "&text=" + encodeURIComponent(txt); tg.target = "_blank"; tg.rel = "noopener";
-  const r1 = el("div", "row center-row"); r1.append(share); const r2 = el("div", "row center-row"); r2.append(tg, btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); if (rec.date !== today) r2.append(btn("Bosh sahifa", false, home)); c.append(r1, r2);
+  const r1 = el("div", "row center-row"); r1.append(share); const r2 = el("div", "row center-row"); r2.append(tg); if (rec.date === today) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (rec.date !== today) c.prepend(backLink("Arxiv", archive)); c.append(r1, r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`)); }
   else c.append(el("p", "next", `Arxivdagi #${rec.no} (${prettyDate(rec.date)}). Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
   const st = statsOf(); const sg = el("div", "stats"); [["O'yinlar", st.played], ["Ketma-ket kun", st.streak], ["Eng yaxshi", st.best], ["O'rtacha", st.avg]].forEach(([k, v]) => { const d = el("div"); d.append(el("b", null, String(v)), el("small", null, k)); sg.append(d); }); c.append(sg);
   show(c); window.scrollTo(0, 0);
 }
-function practiceMenu() { showStage(false); progress.hidden = true; const c = el("section", "card"); c.append(el("div", "step", "Mashq"), el("h2", null, "Qaysi testni mashq qilasiz?"), el("p", "lead", "Mashq natijalari hisobga olinmaydi, xohlagancha takrorlash mumkin."), practiceRow()); const row = el("div", "row"); row.append(btn("Orqaga", false, home)); c.append(row); show(c); }
+function practiceMenu() { showStage(false); progress.hidden = true; setMeta(todayNo, today); const c = el("section", "card"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Mashq"), el("h2", null, "Qaysi testni mashq qilasiz?"), el("p", "lead", "Mashq natijalari hisobga olinmaydi, xohlagancha takrorlash mumkin."), practiceRow()); show(c); window.scrollTo(0, 0); }
 
 function archive() {
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const hist = store.get("history", {});
-  const c = el("section", "card"); c.append(el("div", "step", "Arxiv"), el("h2", null, "O'tgan kunlar jumboqlari"), el("p", "lead", "Har bir kunning o'z topshiriqlari bor. O'ynamagan kuningizni tanlang yoki oldingi natijangizni ko'ring."));
+  const c = el("section", "card"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Arxiv"), el("h2", null, "O'tgan kunlar jumboqlari"), el("p", "lead", "Har bir kunning o'z topshiriqlari bor. O'ynamagan kuningizni tanlang yoki oldingi natijangizni ko'ring."));
   const list = el("div", "arch");
   for (let n = todayNo; n >= 1; n--) { const ds = dateOfNo(n), rec = hist[ds]; const b = el("button", "arch-row"); b.type = "button";
     b.append(el("span", "arch-no", `#${n}`), el("span", "arch-date", n === todayNo ? `${prettyDate(ds)} · bugun` : prettyDate(ds)), el("span", "arch-score", rec ? `${grade(rec.total)} · ${rec.total}` : "O'ynash"));
     if (rec) b.classList.add("played");
     b.addEventListener("click", () => rec ? renderResults(rec) : (n === todayNo ? home() : playDaily(ds))); list.append(b); }
-  const row = el("div", "row"); row.append(btn("Bosh sahifa", false, home)); c.append(list, row); show(c); window.scrollTo(0, 0);
+  c.append(list); show(c); window.scrollTo(0, 0);
 }
 function selectPre(pre) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
-function practiceRow() { const p = el("div", "practice"); for (const t of TESTS) p.append(btn(t.name, false, () => practice(t))); return p; }
+function practiceRow() { const p = el("div", "pick"); for (const t of TESTS) { const b = el("button", "pick-row"); b.type = "button"; const tile = el("span", "tile"); tile.append(icon(t, 22)); const mid = el("span"); mid.append(el("b", null, t.name), el("small", null, t.about)); const chev = el("span", "chev"); chev.innerHTML = ARROW_R; b.append(tile, mid, chev); b.addEventListener("click", () => practice(t)); p.append(b); } return p; }
 async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const { r, s } = await runTest(t, t.gen(rng("mashq-" + Math.random())));
   const c = el("section", "panel"); const v = el("div", "verdict"); v.append(el("b", null, String(s)), el("span", "chip", `${grade(s)} · ${title(s)}`), el("div", "what", r.human)); c.append(el("div", "step", "mashq · hisobga olinmaydi"), v);
-  const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Bosh sahifa", false, home)); c.append(row); show(c); row.firstChild.focus(); }
+  const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Boshqa test tanlash", false, practiceMenu)); c.append(row, backLink("Bosh sahifa", home)); show(c); row.firstChild.focus(); }
 
 function home() {
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
