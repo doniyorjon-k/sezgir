@@ -1,0 +1,11 @@
+name = "sezgir-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sezgir"
+database_id = "FILL_AFTER_CREATE"
+
+[vars]
+ALLOWED_ORIGINS = "https://doniyorjon-k.github.io"

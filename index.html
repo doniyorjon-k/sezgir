@@ -137,6 +137,15 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .statbar b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .statbar b.hot { color: var(--accent); }
 .statbar small { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+.global { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.global .ghead { font-weight: 500; }
+.global .muted, .home-live { color: var(--muted); font-size: 13px; }
+.home-live:empty { display: none; }
+.hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; height: 90px; align-items: end; max-width: 420px; width: 100%; margin: 0 auto; }
+.hcol { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.hcol i { width: 100%; background: var(--line); border-radius: 4px 4px 0 0; display: block; }
+.hcol.me i { background: var(--accent); }
+.hcol small { font-size: 10px; color: var(--muted); }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
@@ -213,6 +222,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 <script>
 (() => {
 const GAME = "Sezgir";
+const API = ""; // stats server (Cloudflare Worker) base URL; empty = global stats off
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -237,6 +247,8 @@ const store = {
   get(k, def) { try { const v = localStorage.getItem("sezgir:" + k); return v ? JSON.parse(v) : def; } catch { return def; } },
   set(k, v) { try { localStorage.setItem("sezgir:" + k, JSON.stringify(v)); } catch {} }
 };
+function clientId() { let id = store.get("client", ""); if (!/^[a-z0-9]{16,40}$/.test(id)) { id = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(36).padStart(2, "0")).join("").slice(0, 24); store.set("client", id); } return id; }
+async function api(path, body) { if (!API) return null; try { const r = await fetch(API + path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}); return r.ok ? await r.json() : null; } catch { return null; } }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 1800); }
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -466,11 +478,21 @@ function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 1
   return svg; }
 
 const WEEKDAYS = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
+async function globalBlock(box, rec) {
+  let st;
+  if (!rec.sent) { st = await api("/submit", { date: rec.date, client: clientId(), scores: rec.results.map(r => r.score) }); if (st) { const h = store.get("history", {}); if (h[rec.date]) { h[rec.date].sent = true; store.set("history", h); } } }
+  else st = await api(`/stats?date=${rec.date}&total=${rec.total}`);
+  if (!st || !st.players) { box.remove(); return; }
+  const others = st.players - 1, mine = Math.min(Math.floor(rec.total / 10), 9), max = Math.max(...st.hist, 1);
+  const head = others > 0 ? `Bugun ${st.players} kishi o'ynadi. Siz ularning ${st.beats}% idan yaxshi natija ko'rsatdingiz.` : "Bugun birinchi bo'lib o'ynadingiz!";
+  const bars = el("div", "hist"); st.hist.forEach((n, i) => { const col = el("div", "hcol" + (i === mine ? " me" : "")); const bar = el("i"); bar.style.height = `${Math.max(4, n / max * 100)}%`; col.append(bar, el("small", null, String(i * 10))); bars.append(col); });
+  box.replaceChildren(el("p", "ghead", head), bars, el("p", "muted", `kunlik o'rtacha ball: ${st.avg} · sizning ustuningiz ajratilgan`)); }
 function renderResults(rec) {
   showStage(false); progress.hidden = true; setMeta(rec.no, rec.date);
   const c = el("section", "card result-card");
   const hero = el("div", "hero"); const num = el("div", "num"); num.append(el("b", "grade", grade(rec.total)), el("div", "num-side")); num.lastChild.append(el("strong", null, `${rec.total} ball`), el("span", null, title(rec.total)));
   hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num, el("p", null, "beshta testning o'rtachasi"), el("p", "scale", GRADE_SCALE)); c.append(hero);
+  if (API && rec.date === today) { const g = el("div", "global"); g.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); c.append(g); globalBlock(g, rec); }
   const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
   const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
   const txt = shareText(rec);
@@ -506,6 +528,7 @@ function home() {
   const c = el("section", "home"); const d = new Date();
   const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); icons.append(x); });
   c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
+  if (API) { const live = el("div", "home-live"); c.append(live); api(`/stats?date=${today}`).then(st => { if (st && st.players) live.textContent = `Bugun ${st.players} kishi o'ynadi · o'rtacha ball ${st.avg}`; }); }
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); x.append(icon(t, 20), el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
