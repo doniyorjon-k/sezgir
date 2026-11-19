@@ -120,6 +120,13 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .howto i { width: 8px; height: 8px; border-radius: 50%; margin-top: 8px; }
 .howto b { font-weight: 600; }
 .howto p { grid-column: 2; color: var(--muted); font-size: 14px; }
+.arch { display: flex; flex-direction: column; }
+.arch-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 4px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: 400 15px var(--font-body); text-align: left; cursor: pointer; }
+.arch-row:hover { background: var(--bg); }
+.arch-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.arch-no { color: var(--muted); font-variant-numeric: tabular-nums; }
+.arch-score { font-weight: 500; color: var(--accent); font-variant-numeric: tabular-nums; }
+.arch-row.played .arch-score { color: var(--ink); }
 .radar { width: 100%; max-width: 300px; margin: 0 auto; display: block; }
 .radar text { font: 500 11px var(--font-body); fill: var(--muted); }
 </style>
@@ -322,19 +329,24 @@ function verdict(t, r, s, nextLabel) { return new Promise(res => { const c = el(
 
 async function runTest(t, params) { redraw = null; hud.replaceChildren(); const r = await t.run(params); hud.replaceChildren(); const s = scoreOf(r.err, t.sigma); t.reveal(params, r); redraw = () => t.reveal(params, r); return { r, s }; }
 
-async function playDaily() {
-  const R = rng("sezgir-" + today); const params = TESTS.map(t => t.gen(R)); const results = [];
+function dateOfNo(n) { return ymd(new Date(LAUNCH.y, LAUNCH.m - 1, LAUNCH.d + n - 1)); }
+function prettyDate(ds) { const [y, m, d] = ds.split("-").map(Number); return `${d}-${MONTHS[m - 1]}`; }
+function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
+async function playDaily(date = today) {
+  if (typeof date !== "string") date = today;
+  const no = puzzleNo(date); setMeta(no, date);
+  const R = rng("sezgir-" + date); const params = TESTS.map(t => t.gen(R)); const results = [];
   progress.hidden = false;
   for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length); const { r, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s, human: r.human }); renderProgress(results, i + 1); await verdict(t, r, s, i < TESTS.length - 1 ? `Keyingi: ${TESTS[i + 1].name}` : "Umumiy natija"); }
   const total = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
-  const rec = { date: today, no: todayNo, total, results };
-  const hist = store.get("history", {}); hist[today] = rec; store.set("history", hist);
+  const rec = { date, no, total, results, late: date !== today };
+  const hist = store.get("history", {}); hist[date] = rec; store.set("history", hist);
   renderResults(rec);
 }
 
 function statsOf() {
   const hist = store.get("history", {}); const days = Object.keys(hist).sort(); const scores = days.map(d => hist[d].total);
-  let streak = 0; const d = new Date(); if (!hist[ymd(d)]) d.setDate(d.getDate() - 1); while (hist[ymd(d)]) { streak++; d.setDate(d.getDate() - 1); }
+  let streak = 0; const d = new Date(); if (!hist[ymd(d)]) d.setDate(d.getDate() - 1); while (hist[ymd(d)] && !hist[ymd(d)].late) { streak++; d.setDate(d.getDate() - 1); }
   return { played: days.length, streak, best: scores.length ? Math.max(...scores) : 0, avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0 };
 }
 function shareText(rec) { const sc = TESTS.map(t => rec.results.find(r => r.id === t.id).score); return `${GAME} #${rec.no}: ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${TESTS.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
@@ -359,8 +371,21 @@ function renderResults(rec) {
   const tg = el("a", "btn", "Telegram'da ulashish"); tg.href = "https://t.me/share/url?url=" + encodeURIComponent(location.href.split("#")[0]) + "&text=" + encodeURIComponent(txt); tg.target = "_blank"; tg.rel = "noopener";
   row.append(copy, tg); c.append(pre, row);
   const st = statsOf(); const sg = el("div", "stats"); [["O'yinlar", st.played], ["Ketma-ket kun", st.streak], ["Eng yaxshi", st.best], ["O'rtacha", st.avg]].forEach(([k, v]) => { const d = el("div"); d.append(el("b", null, String(v)), el("small", null, k)); sg.append(d); }); c.append(sg);
-  c.append(el("p", "lead", `Ertaga #${rec.no + 1} yangi jumboq chiqadi. Hozircha istalgan testni mashq qilishingiz mumkin:`), practiceRow());
-  show(c);
+  if (rec.date === today) c.append(el("p", "lead", `Ertaga #${rec.no + 1} yangi jumboq chiqadi. Hozircha o'tgan kunlarni o'ynashingiz yoki istalgan testni mashq qilishingiz mumkin:`));
+  else c.append(el("p", "lead", `Bu arxivdagi #${rec.no} (${prettyDate(rec.date)}) jumboq. Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
+  const nav = el("div", "row"); nav.append(btn("Arxiv", false, archive)); if (rec.date !== today) nav.append(btn("Bosh sahifa", false, home)); c.append(nav, practiceRow());
+  setMeta(rec.no, rec.date); show(c);
+}
+
+function archive() {
+  showStage(false); progress.hidden = true; setMeta(todayNo, today); const hist = store.get("history", {});
+  const c = el("section", "card"); c.append(el("div", "step", "Arxiv"), el("h2", null, "O'tgan kunlar jumboqlari"), el("p", "lead", "Har bir kunning o'z topshiriqlari bor. O'ynamagan kuningizni tanlang yoki oldingi natijangizni ko'ring."));
+  const list = el("div", "arch");
+  for (let n = todayNo; n >= 1; n--) { const ds = dateOfNo(n), rec = hist[ds]; const b = el("button", "arch-row"); b.type = "button";
+    b.append(el("span", "arch-no", `#${n}`), el("span", "arch-date", n === todayNo ? `${prettyDate(ds)} · bugun` : prettyDate(ds)), el("span", "arch-score", rec ? `${rec.total} · ${title(rec.total)}` : "O'ynash"));
+    if (rec) b.classList.add("played");
+    b.addEventListener("click", () => rec ? renderResults(rec) : (n === todayNo ? home() : playDaily(ds))); list.append(b); }
+  const row = el("div", "row"); row.append(btn("Bosh sahifa", false, home)); c.append(list, row); show(c); window.scrollTo(0, 0);
 }
 function selectPre(pre) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
@@ -370,11 +395,11 @@ async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const
   const row = el("div", "row"); row.append(btn("Yana bir bor", true, () => practice(t)), btn("Bosh sahifa", false, home)); c.append(row); show(c); row.firstChild.focus(); }
 
 function home() {
-  showStage(false); progress.hidden = true; const done = store.get("history", {})[today];
+  showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
   if (done) { renderResults(done); return; }
   const c = el("section", "card");
   c.append(el("div", "step", `Kunlik jumboq #${todayNo}`), el("h1", null, "Ko'zingiz qanchalik aniq?"), el("p", "lead", "Har kuni 5 ta qisqa test: sanash, kuzatish, rang, ritm va ulush. Har biri 0 dan 100 gacha baholanadi, jami taxminan 2 daqiqa. Bugun hamma bir xil topshiriqlarni oladi."));
-  const row = el("div", "row"); const b = btn("O'yinni boshlash", true, playDaily); row.append(b); c.append(row);
+  const row = el("div", "row"); const b = btn("O'yinni boshlash", true, () => playDaily(today)); row.append(b, btn("Arxiv: o'tgan kunlar", false, archive)); c.append(row);
   const how = el("div", "howto"); TESTS.forEach((t, i) => { const d = el("div"); const dot = el("i"); dot.style.background = `var(${t.color})`; d.append(dot, el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(d); });
   c.append(el("h2", null, "Qanday o'ynaladi"), how, el("p", "lead", "Avval mashq qilib ko'rishingiz mumkin (natija hisobga olinmaydi):"), practiceRow());
   show(c); b.focus();
