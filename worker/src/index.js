@@ -23,7 +23,9 @@ async function stats(env, date, total) {
   const rows = await env.DB.prepare("SELECT MIN(total / 10, 9) AS b, COUNT(*) AS c FROM plays WHERE date = ? GROUP BY b").bind(date).all();
   const hist = Array(10).fill(0); for (const r of rows.results) hist[r.b] = r.c;
   const all = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS players FROM plays").first();
-  const out = { date, players: agg.n, avg: agg.avg ?? 0, hist, allPlayers: all.players };
+  const ta = await env.DB.prepare("SELECT " + [0, 1, 2, 3, 4].map(i => `ROUND(AVG(json_extract(scores, '$[${i}]'))) AS t${i}`).join(", ") + ", MAX(total) AS best FROM plays WHERE date = ?").bind(date).first();
+  const vis = await env.DB.prepare("SELECT COUNT(*) AS c FROM visits WHERE date = ?").bind(date).first();
+  const out = { date, players: agg.n, avg: agg.avg ?? 0, hist, allPlayers: all.players, testAvg: agg.n ? [0, 1, 2, 3, 4].map(i => ta[`t${i}`]) : null, best: ta.best, visitors: vis.c };
   if (Number.isInteger(total) && agg.n > 0) {
     const below = await env.DB.prepare("SELECT COUNT(*) AS c FROM plays WHERE date = ? AND total < ?").bind(date, total).first();
     out.beats = Math.round(below.c / agg.n * 100);
@@ -42,11 +44,11 @@ async function live(env) {
   return { online: on.c, today: td.c, day };
 }
 
-async function summary(env) { // last 14 days: visitors and players per day
-  const since = tzDay(new Date(Date.now() - 13 * 864e5));
+async function summary(env, n = 14) { // last n days: visitors and players per day
+  const since = tzDay(new Date(Date.now() - (n - 1) * 864e5));
   const v = await env.DB.prepare("SELECT date, COUNT(*) AS c FROM visits WHERE date >= ? GROUP BY date").bind(since).all();
   const p = await env.DB.prepare("SELECT date, COUNT(*) AS c, ROUND(AVG(total)) AS avg FROM plays WHERE date >= ? GROUP BY date").bind(since).all();
-  const days = []; for (let i = 13; i >= 0; i--) { const d = tzDay(new Date(Date.now() - i * 864e5)); const vv = v.results.find(r => r.date === d), pp = p.results.find(r => r.date === d); days.push({ date: d, visitors: vv?.c ?? 0, players: pp?.c ?? 0, avg: pp?.avg ?? null }); }
+  const days = []; for (let i = n - 1; i >= 0; i--) { const d = tzDay(new Date(Date.now() - i * 864e5)); const vv = v.results.find(r => r.date === d), pp = p.results.find(r => r.date === d); days.push({ date: d, visitors: vv?.c ?? 0, players: pp?.c ?? 0, avg: pp?.avg ?? null }); }
   const tot = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits").first();
   return { days, allVisitors: tot.c };
 }
@@ -63,7 +65,7 @@ export default {
         return json(await stats(env, date, total), 200, { ...h, "Cache-Control": "public, max-age=30" });
       }
       if (url.pathname === "/live" && req.method === "GET") return json(await live(env), 200, { ...h, "Cache-Control": "public, max-age=20" });
-      if (url.pathname === "/summary" && req.method === "GET") return json(await summary(env), 200, { ...h, "Cache-Control": "public, max-age=60" });
+      if (url.pathname === "/summary" && req.method === "GET") return json(await summary(env, Math.min(Math.max(parseInt(url.searchParams.get("days") || "14", 10) || 14, 7), 60)), 200, { ...h, "Cache-Control": "public, max-age=60" });
       if (url.pathname === "/ping" && req.method === "POST") {
         const b = await req.json().catch(() => null);
         if (!b || !CLIENT.test(b.client)) return json({ error: "bad body" }, 400, h);
