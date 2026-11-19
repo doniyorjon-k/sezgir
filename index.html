@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Sezgir: har kuni 5 ta qisqa idrok testi.">
 <title>Sezgir</title>
-<script defer data-website-id="dfid_25GpAdEIeMJRhOJTUeamA" data-domain="sezgir.github.io" src="https://datafa.st/js/script.js"></script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -156,6 +155,23 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 header { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand pulse right"; align-items: center; column-gap: 18px; }
 header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .head-right { grid-area: right; }
 @media (max-width: 560px) { header { grid-template-columns: 1fr auto; grid-template-areas: "brand right" "pulse pulse"; row-gap: 6px; } .pulse { font-size: 12px; } }
+.stats-page h3 { font-size: 14px; font-weight: 600; margin-top: 8px; }
+.sp-body { display: flex; flex-direction: column; gap: 14px; }
+.sp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .sp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sp-tiles > div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.sp-tiles b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-tiles b.hot { color: var(--good); }
+.sp-tiles small { font-size: 12px; color: var(--muted); }
+.sp-days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; height: 120px; }
+.sp-day { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.sp-day .bars { flex: 1; width: 100%; display: flex; gap: 2px; align-items: flex-end; }
+.sp-day .bars i { flex: 1; border-radius: 3px 3px 0 0; display: block; }
+.sp-day small { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent); }
+.sp-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.sp-legend span { display: inline-flex; align-items: center; gap: 6px; } .sp-legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.sp-foot { font-size: 13px; color: var(--muted); }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
@@ -216,7 +232,7 @@ header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .
 
 <div class="wrap">
   <header>
-    <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" target="_blank" rel="noopener"></a>
+    <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" href="#statistika"></a>
     <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="statbar" class="statbar" hidden></div>
@@ -233,7 +249,6 @@ header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .
 (() => {
 const GAME = "Sezgir";
 const API = "https://sezgir-api.sezgir-uz.workers.dev"; // stats server (Cloudflare Worker) base URL; empty = global stats off
-const LIVE_STATS = "https://datafa.st/share/6afe9c0384dcacca0a564198"; // public DataFast dashboard
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -425,7 +440,7 @@ const today = ymd(), todayNo = puzzleNo(today);
 const now = new Date();
 $("#meta").textContent = `#${todayNo} · ${now.getDate()}-${MONTHS[now.getMonth()]}`;
 function show(...nodes) { screen.replaceChildren(...nodes); paintStatBar(); }
-function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home")) { bar.hidden = true; return; }
+function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home, .stats-page")) { bar.hidden = true; return; }
   const st = statsOf(); const todayRec = store.get("history", {})[today];
   const items = [["O'yinlar", st.played], ["Ketma-ket", st.streak, st.streak > 0], ["Eng yaxshi", st.best ? `${grade(st.best)} · ${st.best}` : "–"], ["Bugun", todayRec ? `${grade(todayRec.total)} · ${todayRec.total}` : "–", !!todayRec]];
   bar.replaceChildren(...items.map(([k, v, hot]) => { const d = el("div"); const b = el("b", hot ? "hot" : null, String(v)); d.append(b, el("small", null, k)); return d; })); bar.hidden = false; }
@@ -456,12 +471,28 @@ const MOON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke
 function paintThemeBtn() { const dark = document.documentElement.dataset.theme !== "light"; const b = $("#themeBtn"); b.innerHTML = dark ? SUN : MOON; b.setAttribute("aria-label", dark ? "Oq fonga o'tish" : "Qora fonga o'tish"); b.title = b.getAttribute("aria-label"); }
 $("#themeBtn").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sezgir:theme", next); } catch {} paintThemeBtn(); if (redraw && !stageBox.hidden) redraw(); });
 paintThemeBtn();
-// header pulse: "N onlayn · bugun M · statistika →" (numbers come from our stats server, which reads DataFast)
-function paintPulse(live) { const p = $("#pulse"); p.href = LIVE_STATS; p.replaceChildren(el("i"));
-  if (live && Number.isFinite(live.online)) { p.append(el("b", null, `${live.online} onlayn`), document.createTextNode(` · bugun ${live.today ?? 0} tashrif · `), el("span", "go", "statistika →")); }
-  else p.append(el("span", "go", "Jonli statistika →")); }
-async function refreshPulse() { paintPulse(await api("/live")); }
-paintPulse(null); if (API) { refreshPulse(); setInterval(refreshPulse, 60000); }
+// header pulse: "N onlayn · bugun M tashrif · statistika →", counted by our own server (a ping every 2 minutes while the page is open)
+const inGame = () => !progress.hidden || !stageBox.hidden;
+function paintPulse(live) { const p = $("#pulse"); p.replaceChildren(el("i"));
+  if (live && Number.isFinite(live.online)) p.append(el("b", null, `${live.online} onlayn`), document.createTextNode(` · bugun ${live.today ?? 0} tashrif · `), el("span", "go", "statistika →"));
+  else p.append(el("span", "go", "Statistika →")); }
+async function ping() { if (document.visibilityState !== "visible") return; const r = await api("/ping", { client: clientId() }); if (r) paintPulse(r); }
+paintPulse(null); if (API) { ping(); setInterval(ping, 120000); document.addEventListener("visibilitychange", ping); }
+$("#pulse").addEventListener("click", e => { e.preventDefault(); if (inGame()) { toast("Statistikani test tugagach ko'rishingiz mumkin"); return; } statsPage(); });
+
+async function statsPage() {
+  showStage(false); progress.hidden = true; setMeta(todayNo, today);
+  const c = el("section", "card stats-page"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Statistika"), el("h2", null, `${GAME} statistikasi`));
+  const body = el("div", "sp-body"); body.append(el("p", "lead", "Yuklanmoqda...")); c.append(body); show(c); window.scrollTo(0, 0);
+  const [lv, st, sm] = await Promise.all([api("/live"), api(`/stats?date=${today}`), api("/summary")]);
+  if (!lv || !st || !sm) { body.replaceChildren(el("p", "lead", "Statistikani hozir yuklab bo'lmadi. Birozdan keyin qayta urinib ko'ring.")); return; }
+  const tiles = el("div", "sp-tiles"); [["Hozir onlayn", lv.online, true], ["Bugungi tashriflar", lv.today], ["Bugun o'ynaganlar", st.players], ["Bugungi o'rtacha", st.players ? `${grade(st.avg)} · ${st.avg}` : "–"]].forEach(([k, v, hot]) => { const d = el("div"); d.append(el("b", hot ? "hot" : null, String(v)), el("small", null, k)); tiles.append(d); });
+  const hist = el("div", "hist"); const mx = Math.max(...st.hist, 1); st.hist.forEach((n, i) => { const col = el("div", "hcol"); const bar = el("i"); bar.style.height = `${Math.max(4, n / mx * 100)}%`; col.append(bar, el("small", null, String(i * 10))); hist.append(col); });
+  const days = el("div", "sp-days"); const dm = Math.max(...sm.days.map(d => d.visitors), 1);
+  sm.days.forEach(d => { const col = el("div", "sp-day"); const v = el("i", "v"); v.style.height = `${Math.max(3, d.visitors / dm * 100)}%`; const p = el("i", "p"); p.style.height = `${Math.max(d.players ? 3 : 0, d.players / dm * 100)}%`; const bars = el("div", "bars"); bars.append(v, p); col.title = `${prettyDate(d.date)}: ${d.visitors} tashrif, ${d.players} o'yinchi`; col.append(bars, el("small", null, String(+d.date.slice(8)))); days.append(col); });
+  const legend = el("div", "sp-legend"); legend.innerHTML = '<span><i class="v"></i>tashriflar</span><span><i class="p"></i>o\'yinchilar</span>';
+  body.replaceChildren(tiles, el("h3", null, "Bugungi ballar taqsimoti"), st.players ? hist : el("p", "lead", "Bugun hali hech kim o'ynamadi."), el("h3", null, "So'nggi 14 kun"), days, legend, el("p", "sp-foot", `Jami ${sm.allVisitors} kishi saytga kirgan · ${st.allPlayers} kishi kamida bir marta o'ynagan`));
+}
 function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
 async function playDaily(date = today) {
   if (typeof date !== "string") date = today;

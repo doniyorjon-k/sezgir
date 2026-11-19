@@ -31,24 +31,28 @@ async function stats(env, date, total) {
   return out;
 }
 
-// visitors online + today, read from DataFast with a secret key kept in the worker (DATAFAST_KEY)
-async function live(env, ctx) {
-  const cache = caches.default, key = new Request("https://cache.sezgir/live");
-  const hit = await cache.match(key); if (hit) return hit.json();
-  if (!env.DATAFAST_KEY) return { online: null, today: null };
-  const auth = { headers: { Authorization: `Bearer ${env.DATAFAST_KEY}` } };
-  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" }); // YYYY-MM-DD
-  const [rt, ov] = await Promise.all([
-    fetch("https://datafa.st/api/v1/analytics/realtime?fields=visitors", auth).then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch(`https://datafa.st/api/v1/analytics/overview?startAt=${day}&endAt=${day}&timezone=Asia/Tashkent&fields=visitors`, auth).then(r => r.ok ? r.json() : null).catch(() => null),
-  ]);
-  const out = { online: rt?.data?.[0]?.visitors ?? null, today: ov?.data?.[0]?.visitors ?? null };
-  ctx.waitUntil(cache.put(key, new Response(JSON.stringify(out), { headers: { "Cache-Control": "max-age=60" } })));
-  return out;
+// visitors: counted by our own pings, no third-party analytics
+const ONLINE_MS = 5 * 60 * 1000;
+const tzDay = (d = new Date()) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Tashkent" }); // YYYY-MM-DD
+
+async function live(env) {
+  const day = tzDay();
+  const on = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits WHERE last > ?").bind(Date.now() - ONLINE_MS).first();
+  const td = await env.DB.prepare("SELECT COUNT(*) AS c FROM visits WHERE date = ?").bind(day).first();
+  return { online: on.c, today: td.c, day };
+}
+
+async function summary(env) { // last 14 days: visitors and players per day
+  const since = tzDay(new Date(Date.now() - 13 * 864e5));
+  const v = await env.DB.prepare("SELECT date, COUNT(*) AS c FROM visits WHERE date >= ? GROUP BY date").bind(since).all();
+  const p = await env.DB.prepare("SELECT date, COUNT(*) AS c, ROUND(AVG(total)) AS avg FROM plays WHERE date >= ? GROUP BY date").bind(since).all();
+  const days = []; for (let i = 13; i >= 0; i--) { const d = tzDay(new Date(Date.now() - i * 864e5)); const vv = v.results.find(r => r.date === d), pp = p.results.find(r => r.date === d); days.push({ date: d, visitors: vv?.c ?? 0, players: pp?.c ?? 0, avg: pp?.avg ?? null }); }
+  const tot = await env.DB.prepare("SELECT COUNT(DISTINCT client) AS c FROM visits").first();
+  return { days, allVisitors: tot.c };
 }
 
 export default {
-  async fetch(req, env, ctx) {
+  async fetch(req, env) {
     const h = cors(req, env), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
     try {
@@ -58,7 +62,14 @@ export default {
         const t = url.searchParams.get("total"); const total = t === null ? undefined : parseInt(t, 10);
         return json(await stats(env, date, total), 200, { ...h, "Cache-Control": "public, max-age=30" });
       }
-      if (url.pathname === "/live" && req.method === "GET") return json(await live(env, ctx), 200, { ...h, "Cache-Control": "public, max-age=30" });
+      if (url.pathname === "/live" && req.method === "GET") return json(await live(env), 200, { ...h, "Cache-Control": "public, max-age=20" });
+      if (url.pathname === "/summary" && req.method === "GET") return json(await summary(env), 200, { ...h, "Cache-Control": "public, max-age=60" });
+      if (url.pathname === "/ping" && req.method === "POST") {
+        const b = await req.json().catch(() => null);
+        if (!b || !CLIENT.test(b.client)) return json({ error: "bad body" }, 400, h);
+        await env.DB.prepare("INSERT INTO visits (date, client, last) VALUES (?, ?, ?) ON CONFLICT(date, client) DO UPDATE SET last = excluded.last").bind(tzDay(), b.client, Date.now()).run();
+        return json(await live(env), 200, h);
+      }
       if (url.pathname === "/submit" && req.method === "POST") {
         const b = await req.json().catch(() => null);
         if (!b || !DATE.test(b.date) || !CLIENT.test(b.client) || !Array.isArray(b.scores) || b.scores.length !== 5) return json({ error: "bad body" }, 400, h);
