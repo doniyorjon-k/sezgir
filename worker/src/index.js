@@ -86,6 +86,7 @@ async function onMessage(env, msg) {
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
   if (cmd === "/start" && arg && /^g-?\d{1,20}$/.test(arg)) return joinGroup(env, chat, name, u, Number(arg.slice(1)));
+  if (cmd === "/start" && arg && /^v\d{1,5}(_\d{1,3}){5}(_[A-Za-z0-9_-]+)?$/.test(arg)) return openChallenge(env, chat, name, u, arg);
   if (cmd === "/start") {
     const client = arg && CLIENT.test(arg) ? arg : (u?.client || newClient());
     await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET client = excluded.client, name = excluded.name, active = 1").bind(chat, client, name, Date.now()).run();
@@ -153,6 +154,18 @@ async function joinGroup(env, chat, name, u, gid) {
   const fresh = await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(gid, chat, Date.now()).run();
   await tg(env, "sendMessage", { chat_id: chat, text: `Siz «${g.title}» guruhi reytingiga qo'shildingiz ✅\n\nO'ynaganingizdan keyin natijangiz guruhda ko'rinadi. Har kuni 21:00 da bot guruhga kunlik reytingni yozadi.\n\nMuhim: natija hisobga olinishi uchun pastdagi tugma orqali o'ynang.`, reply_markup: playBtn(client) });
   if (fresh.meta?.changes) await tg(env, "sendMessage", { chat_id: gid, text: `${name || "Yangi o'yinchi"} reytingga qo'shildi 👋` });
+}
+
+function unb64url(b) { try { const bin = atob(b.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))).replace(/[<>]/g, "").trim().slice(0, 24); } catch { return ""; } }
+async function openChallenge(env, chat, name, u, arg) { // friend's link shared from inside Telegram: t.me/<bot>?start=v<no>_<s1..s5>_<name>
+  const parts = arg.slice(1).split("_"), no = Number(parts[0]), scores = parts.slice(1, 6).map(Number), who = unb64url(parts.slice(6).join("_")) || "Do'stingiz";
+  const client = u?.client || newClient();
+  await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET name = excluded.name, active = 1").bind(chat, client, name, Date.now()).run();
+  const today = puzzleNo(tzDay());
+  if (no !== today || scores.some(x => x > 100)) { await tg(env, "sendMessage", { chat_id: chat, text: `Bu chaqiruv eski (#${no}). Bugungi Sezgir #${today}ni o'ynab ko'ring!`, reply_markup: playBtn(client) }); return; }
+  const total = Math.round(scores.reduce((a, b) => a + b, 0) / 5);
+  const url = `${SITE}?cid=${client}&vs=${[no, ...scores].join(".")}&n=${encodeURIComponent(who)}`;
+  await tg(env, "sendMessage", { chat_id: chat, text: `${who} sizni Sezgir'ga chaqirdi 🎯\n\nBugun u ${gradeOf(total)} · ${total} ball oldi. Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.\n\nHar kuni 9:00 da yangi jumboq haqida eslatib turaman (/stop bilan o'chiriladi).`, reply_markup: { inline_keyboard: [[{ text: "Qabul qilaman", web_app: { url } }]] } });
 }
 
 async function onGroupMessage(env, msg) {
