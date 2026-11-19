@@ -218,8 +218,14 @@ async function onMyChatMember(env, upd) {
   const st = upd.new_chat_member?.status;
   if (st === "member" || st === "administrator") {
     await env.DB.prepare("INSERT INTO tg_groups (chat_id, title, active, created) VALUES (?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, active = 1").bind(chat.id, (chat.title || "Guruh").slice(0, 60), Date.now()).run();
+    const by = upd.from; let adder = "";
+    if (by && !by.is_bot) { // whoever added the bot joins the group board right away
+      const name = (by.first_name || "").slice(0, 40), u = await env.DB.prepare("SELECT client FROM tg_users WHERE chat_id = ?").bind(by.id).first();
+      await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 0, ?) ON CONFLICT(chat_id) DO UPDATE SET name = excluded.name").bind(by.id, u?.client || newClient(), name, Date.now()).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(chat.id, by.id, Date.now()).run();
+      adder = name; }
     if (upd.old_chat_member?.status === "left" || upd.old_chat_member?.status === "kicked")
-      await tg(env, "sendMessage", { chat_id: chat.id, text: `Salom, «${chat.title || "guruh"}»! Men Sezgir botiman 👋\n\nHar kuni 5 ta qisqa idrok testi. Kim o'ynasa, natijasini shu yerga yozaman, 21:00 da esa kunlik reytingni chiqaraman. Yakshanba kuni haftaning g'olibini e'lon qilaman.\n\nQatnashish uchun pastdagi tugmani bosing.\n/reyting — bugungi reyting`, reply_markup: joinBtn(chat.id) });
+      await tg(env, "sendMessage", { chat_id: chat.id, text: `Salom, «${chat.title || "guruh"}»! Men Sezgir botiman 👋\n\nHar kuni 5 ta qisqa idrok testi. Kim o'ynasa, natijasini shu yerga yozaman, 21:00 da esa kunlik reytingni chiqaraman. Yakshanba kuni haftaning g'olibini e'lon qilaman.\n\n${adder ? `${adder} reytingga qo'shildi. ` : ""}Qatnashish uchun pastdagi tugmani bosing.\n/reyting — bugungi reyting`, reply_markup: joinBtn(chat.id) });
   } else if (st === "left" || st === "kicked") await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(chat.id).run();
 }
 
