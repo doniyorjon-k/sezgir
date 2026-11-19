@@ -325,6 +325,39 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .next { text-align: center; color: var(--muted); font-size: 14px; }
 .remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
 .remind:hover { text-decoration: underline; }
+/* support */
+.sup-card { width: 100%; max-width: 420px; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); transition: border-color .15s, background .15s; }
+.sup-card:hover { border-color: var(--gold); }
+.sup-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.sup-card .sup-ico { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+.sup-card b { display: block; font-weight: 600; font-size: 15px; }
+.sup-card small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 2px; }
+.sup-card .chev { margin-left: auto; color: var(--muted); }
+.result-card .sup-card { align-self: center; }
+.sup-page h4 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 8px; }
+.sup-tally { color: var(--gold); font-size: 14px; font-weight: 500; }
+.stars { display: flex; flex-wrap: wrap; gap: 8px; }
+.star-opt { font: 600 15px var(--font-body); padding: 10px 16px; min-width: 76px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+.star-opt.on { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--surface)); }
+.star-opt:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.star-in { font: 600 15px var(--font-body); width: 130px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--gold); background: var(--surface); color: var(--ink); }
+.sup-anon { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.sup-anon input { accent-color: var(--gold); width: 16px; height: 16px; }
+.btn.gold { background: var(--gold); border-color: var(--gold); color: #1d1606; font-weight: 600; }
+.btn.gold:hover { filter: brightness(1.05); }
+.sup-note { color: var(--muted); font-size: 13px; }
+.sup-note a { color: var(--gold); text-decoration: none; font-weight: 500; }
+.cardno { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--bg); }
+.cardno div { flex: 1 1 auto; min-width: 0; }
+.cardno b { display: block; font: 600 19px var(--font-body); letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cardno small { color: var(--muted); font-size: 13px; }
+.sup-list { display: flex; flex-direction: column; }
+.sup-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.sup-row:last-child { border-bottom: 0; }
+.sup-row .gname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sup-row .anon { color: var(--muted); font-style: italic; }
+.sup-row .st { color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 </style>
 
 <div class="wrap">
@@ -776,7 +809,7 @@ function renderResults(rec) {
   const tg = el("a", "btn primary big tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append(isToday ? "Do'stim bilan o'ynash" : "Do'stimga yuborish"); tg.target = "_blank"; tg.rel = "noopener";
   const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(tgText(rec, isToday)); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
   tg.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); setTg(); T.openTelegramLink(tg.href); } });
-  const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img); sb.append(s1, s2); c.append(sb); if (globalEl) c.append(globalEl); c.append(testsH, rows);
+  const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img); sb.append(s1, s2); c.append(sb); if (API && BOT) c.append(supportCard(() => renderResults(rec))); if (globalEl) c.append(globalEl); c.append(testsH, rows);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`));
     if (BOT) { const a = el("a", "remind"); a.href = `https://t.me/${BOT}?start=${clientId()}`; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>'; a.append("Har kuni Telegram'da eslatib turaylikmi?"); c.append(a); } }
@@ -816,6 +849,42 @@ function howTo(focusId) {
   c.append(el("h4", null, "O'yin tartibi"), flow, el("h4", null, "Beshta test"), tests, el("h4", null, "Baholar"), grades, el("h4", null, "Bilish foydali"), tips, row);
   show(c); if (focusEl) focusEl.scrollIntoView({ block: "center" }); else window.scrollTo(0, 0);
 }
+// ---------- Support: Telegram Stars (via the bot's invoice) and a card number ----------
+const DONATE_CARD = { no: "5614 6887 0540 3722", owner: "D.Q." };
+const HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>';
+function supportCard(back) { const b = el("button", "sup-card"); b.type = "button"; const ic = el("span", "sup-ico"); ic.innerHTML = HEART; const mid = el("span"); mid.append(el("b", null, "Sezgir'ni qo'llab-quvvatlang"), el("small", null, "Bepul va reklamasiz o'yin. Telegram Stars yoki karta orqali.")); const ch = el("span", "chev"); ch.innerHTML = ARROW_R; b.append(ic, mid, ch); b.addEventListener("click", () => supportPage(back)); return b; }
+async function supportPage(back = home) {
+  showStage(false); progress.hidden = true; setMeta(todayNo, today);
+  const c = el("section", "card sup-page"); const tally = el("p", "sup-tally"); tally.hidden = true;
+  c.append(backLink(back === home ? "Bosh sahifa" : "Natija", back), el("div", "step", "Qo'llab-quvvatlash"), el("h2", null, "Sezgir'ga yordam bering"),
+    el("p", "lead", "Sezgir bepul va reklamasiz. Server, yangi testlar va har kungi jumboqlar sizning yordamingiz bilan davom etadi. Har qanday miqdor uchun rahmat!"), tally);
+  // Stars
+  let n = 10; const opts = el("div", "stars"), inp = el("input", "star-in"); inp.type = "number"; inp.min = 1; inp.max = 10000; inp.inputMode = "numeric"; inp.placeholder = "Miqdor"; inp.hidden = true; inp.setAttribute("aria-label", "Stars miqdori");
+  const go = btn("", true, () => pay()); go.classList.remove("primary"); go.classList.add("gold", "big");
+  const paint = () => { opts.querySelectorAll(".star-opt").forEach(o => o.classList.toggle("on", o.dataset.n === (inp.hidden ? String(n) : "x"))); go.textContent = n >= 1 ? `⭐ ${n} Stars yuborish` : "Miqdorni kiriting"; go.disabled = !(n >= 1); };
+  [5, 10, 20].forEach(x => { const o = el("button", "star-opt", `⭐ ${x}`); o.type = "button"; o.dataset.n = String(x); o.addEventListener("click", () => { n = x; inp.hidden = true; paint(); }); opts.append(o); });
+  const other = el("button", "star-opt", "Boshqa"); other.type = "button"; other.dataset.n = "x"; other.addEventListener("click", () => { inp.hidden = false; n = parseInt(inp.value, 10) || 0; paint(); inp.focus(); }); opts.append(other, inp);
+  inp.addEventListener("input", () => { n = clamp(parseInt(inp.value, 10) || 0, 0, 10000); paint(); });
+  const anon = el("label", "sup-anon"); const cb = el("input"); cb.type = "checkbox"; anon.append(cb, "Ismim reytingda ko'rinmasin");
+  const note = el("p", "sup-note", inTg() ? "To'lov Telegram ichida tasdiqlanadi." : "Telegram ochiladi va to'lovni o'sha yerda tasdiqlaysiz.");
+  async function pay() { if (!(n >= 1)) return; const T = inTg(), w = T ? null : window.open("", "_blank"); go.disabled = true; const r = await api("/support/invoice", { stars: n, anon: cb.checked }); go.disabled = false;
+    if (!r || !r.link) { if (w) w.close(); toast("Ulanib bo'lmadi, birozdan keyin urinib ko'ring"); return; }
+    if (T && T.openInvoice && T.isVersionAtLeast("6.1")) T.openInvoice(r.link, st => { if (st === "paid") { toast("Katta rahmat! 💛"); setTimeout(loadTop, 1500); } });
+    else if (T && T.openTelegramLink) T.openTelegramLink(r.link); else if (w) w.location.href = r.link; else location.href = r.link; }
+  paint();
+  // card
+  const card = el("div", "cardno"); const cd = el("div"); cd.append(el("b", null, DONATE_CARD.no), el("small", null, `${DONATE_CARD.owner} · Click, Payme yoki bank ilovasi orqali`));
+  const cp = btn("Nusxalash", false, async () => { try { await navigator.clipboard.writeText(DONATE_CARD.no.replace(/\s/g, "")); toast("Karta raqami nusxalandi"); } catch { selectPre(cd.firstChild); } }); cp.classList.add("sm"); card.append(cd, cp);
+  // top supporters
+  const list = el("div", "sup-list"); list.append(el("p", "sup-note", "Yuklanmoqda..."));
+  async function loadTop() { const d = await api("/support"); if (!d) { list.replaceChildren(el("p", "sup-note", "Ro'yxatni yuklab bo'lmadi.")); return; }
+    if (d.people) { tally.hidden = false; tally.textContent = `${d.people} kishi qo'llab-quvvatladi · jami ${d.stars} ⭐`; }
+    if (!d.top.length) { list.replaceChildren(el("p", "sup-note", "Hali hech kim yo'q. Birinchi bo'ling!")); return; }
+    list.replaceChildren(...d.top.map((r, i) => { const row = el("div", "sup-row"); row.append(el("span", "gmed", ["🥇", "🥈", "🥉"][i] || String(i + 1)), el("span", "gname" + (r.name ? "" : " anon"), r.name || "Yashirin do'st"), el("span", "st", `${r.stars} ⭐`)); return row; })); }
+  const contact = el("p", "sup-note"); const ca = el("a", null, "@doniyorjon_k"); ca.href = "https://t.me/doniyorjon_k"; ca.target = "_blank"; ca.rel = "noopener"; ca.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); T.openTelegramLink(ca.href); } }); contact.append("Taklif, savol yoki hamkorlik: ", ca);
+  c.append(el("h4", null, "Telegram Stars"), opts, anon, go, note, el("h4", null, "Karta orqali"), card, el("p", "sup-note", "Karta orqali yuborilganlar reytingga avtomatik tushmaydi."), el("h4", null, "Qo'llab-quvvatlovchilar"), list, contact);
+  show(c); window.scrollTo(0, 0); loadTop();
+}
 function home() {
   clearInterval(spTimer);
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
@@ -826,6 +895,7 @@ function home() {
   const v = activeVs(); if (v) { const vb = el("div", "vs-banner"); const p = el("p"); p.append(`${v.name} bugun `, el("b", null, `${grade(vsTotal(v))} · ${vsTotal(v)} ball`), " oldi."); vb.append(p, el("small", null, "Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.")); c.append(vb); }
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Qanday o'ynaladi?", false, () => howTo()), btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
+  if (API && BOT) c.append(supportCard(home));
   show(c); b.focus();
 }
 // ---------- Telegram Mini App: full screen, no swipe-to-close while dragging on the stage ----------

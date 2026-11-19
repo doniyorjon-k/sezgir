@@ -41,3 +41,14 @@ CREATE TABLE IF NOT EXISTS tg_members (
   PRIMARY KEY (group_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS tg_members_user ON tg_members (user_id);
+
+-- Telegram Stars donations ("Qo'llab-quvvatlash")
+CREATE TABLE IF NOT EXISTS donations (
+  charge_id TEXT PRIMARY KEY,        -- telegram_payment_charge_id
+  chat_id   INTEGER NOT NULL,        -- payer's Telegram user id
+  name      TEXT,
+  stars     INTEGER NOT NULL,
+  anon      INTEGER NOT NULL DEFAULT 0,
+  created   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS donations_chat ON donations (chat_id);

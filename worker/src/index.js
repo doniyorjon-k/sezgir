@@ -83,9 +83,11 @@ async function onMessage(env, msg) {
   if (!chat) return;
   if (msg.chat.type === "group" || msg.chat.type === "supergroup") return onGroupMessage(env, msg);
   if (msg.chat.type !== "private") return;
+  if (msg.successful_payment) return onPaid(env, msg);
   const name = (msg.from?.first_name || "").slice(0, 40);
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
+  if (cmd === "/qollash" || (cmd === "/start" && arg === "qollash")) { const n = cmd === "/qollash" ? parseInt(arg, 10) : 0; return supportMenu(env, chat, n >= 1 && n <= 10000 ? n : 0); }
   if (cmd === "/start" && arg && /^g-?\d{1,20}$/.test(arg)) return joinGroup(env, chat, name, u, Number(arg.slice(1)));
   if (cmd === "/start" && arg && /^v\d{1,5}(_\d{1,3}){5}(_[A-Za-z0-9_-]+)?$/.test(arg)) return openChallenge(env, chat, name, u, arg);
   if (cmd === "/start") {
@@ -109,7 +111,7 @@ async function onMessage(env, msg) {
     await tg(env, "sendMessage", { chat_id: chat, text: `Sezgir #${puzzleNo(day)}\n${mine}\nSeriya: ${streak} kun${streak ? " 🔥" : ""}\n\nBugun ${agg.n} kishi o'ynadi${agg.n ? `, o'rtacha ball ${agg.avg}` : ""}.`, reply_markup: todayRec == null ? playBtn(u.client) : undefined });
     return;
   }
-  await tg(env, "sendMessage", { chat_id: chat, text: "Pastdagi tugma bilan bugungi jumboqni oching.\n\n/natija — bugungi holatingiz\n/stop — eslatmalarni o'chirish", reply_markup: playBtn(u.client) });
+  await tg(env, "sendMessage", { chat_id: chat, text: "Pastdagi tugma bilan bugungi jumboqni oching.\n\n/natija — bugungi holatingiz\n/qollash — Sezgir'ni qo'llab-quvvatlash\n/stop — eslatmalarni o'chirish", reply_markup: playBtn(u.client) });
 }
 
 async function remind(env, evening) {
@@ -128,6 +130,32 @@ async function remind(env, evening) {
 }
 
 
+// ---------- Support: Telegram Stars donations ----------
+const STARS = [5, 10, 20, 50];
+const OWNER_ID = 699254555, OWNER = "doniyorjon_k"; // game author: gets a note on each donation
+async function invoiceLink(env, stars, anon) {
+  const r = await tg(env, "createInvoiceLink", { title: "Sezgir'ni qo'llab-quvvatlash", description: `${stars} ⭐ Sezgir'ga: yangi testlar, server va reklamasiz o'yin uchun. Rahmat!`, payload: `don:${anon ? 1 : 0}`, currency: "XTR", prices: [{ label: "Qo'llab-quvvatlash", amount: stars }] });
+  return r.ok ? r.result : null;
+}
+async function supportMenu(env, chat, n) { // /qollash [N]
+  if (n) { const link = await invoiceLink(env, n, false); await tg(env, "sendMessage", { chat_id: chat, text: `${n} ⭐ bilan qo'llab-quvvatlash:`, reply_markup: { inline_keyboard: [[{ text: `⭐ ${n} Stars yuborish`, style: "success", url: link }]] } }); return; }
+  const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
+  await tg(env, "sendMessage", { chat_id: chat, text: `Sezgir bepul va reklamasiz. Yoqsa, Telegram Stars bilan qo'llab-quvvatlang: yangi testlar va server shu hisobdan bo'ladi 🙏\n\nQo'llab-quvvatlaganlar ismi yonida guruh reytinglarida ⭐ turadi.\nBoshqa miqdor: /qollash 100\nTaklif va savollar: @${OWNER}`, reply_markup: { inline_keyboard: [STARS.slice(0, 2).map((x, i) => ({ text: `⭐ ${x}`, url: links[i] })), STARS.slice(2).map((x, i) => ({ text: `⭐ ${x}`, url: links[i + 2] }))] } });
+}
+async function onPaid(env, msg) {
+  const p = msg.successful_payment; if (p.currency !== "XTR") return;
+  const anon = p.invoice_payload === "don:1" ? 1 : 0, name = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ").slice(0, 40) || "Do'st";
+  await env.DB.prepare("INSERT OR IGNORE INTO donations (charge_id, chat_id, name, stars, anon, created) VALUES (?, ?, ?, ?, ?, ?)").bind(p.telegram_payment_charge_id, msg.from.id, name, p.total_amount, anon, Date.now()).run();
+  const sum = await env.DB.prepare("SELECT SUM(stars) AS s FROM donations WHERE chat_id = ?").bind(msg.from.id).first();
+  if (msg.from.id !== OWNER_ID) await tg(env, "sendMessage", { chat_id: OWNER_ID, text: `💛 Yangi qo'llab-quvvatlash: ${name}${msg.from.username ? ` (@${msg.from.username})` : ""}, ${p.total_amount} ⭐${anon ? " · yashirin" : ""}\nUning jami: ${sum.s} ⭐` });
+  await tg(env, "sendMessage", { chat_id: msg.chat.id, text: `Katta rahmat, ${msg.from?.first_name || "do'stim"}! ${p.total_amount} ⭐ qabul qilindi 💛\n\nJami qo'llab-quvvatlovingiz: ${sum.s} ⭐.${anon ? " Ismingiz reytingda ko'rinmaydi." : " Endi guruh reytinglarida ismingiz yonida ⭐ turadi."}` });
+}
+async function supporters(env) {
+  const top = await env.DB.prepare("SELECT chat_id, MAX(anon) AS anon, MAX(name) AS name, SUM(stars) AS stars, MAX(created) AS last FROM donations GROUP BY chat_id ORDER BY stars DESC, last ASC LIMIT 10").all();
+  const agg = await env.DB.prepare("SELECT COUNT(DISTINCT chat_id) AS people, COALESCE(SUM(stars), 0) AS stars FROM donations").first();
+  return { people: agg.people, stars: agg.stars, top: top.results.map(r => ({ name: r.anon ? null : r.name, stars: r.stars })) };
+}
+
 // ---------- Telegram groups: shared daily leaderboard ----------
 const BOT_USER = "sezgiruz_bot";
 const gradeOf = s => s >= 95 ? "A+" : s >= 88 ? "A" : s >= 80 ? "B+" : s >= 70 ? "B" : s >= 62 ? "C+" : s >= 55 ? "C" : s >= 40 ? "D" : "F";
@@ -135,14 +163,14 @@ const joinBtn = gid => ({ inline_keyboard: [[{ text: "🏆 Qatnashish", style: "
 const MEDALS = ["🥇", "🥈", "🥉"];
 
 async function groupBoard(env, gid, day) { // members who played `day`, best first; plus members who did not
-  const rows = await env.DB.prepare("SELECT u.chat_id, u.name, p.total, p.created FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id LEFT JOIN plays p ON p.client = u.client AND p.date = ? WHERE m.group_id = ?").bind(day, gid).all();
+  const rows = await env.DB.prepare("SELECT u.chat_id, u.name, p.total, p.created, EXISTS(SELECT 1 FROM donations d WHERE d.chat_id = u.chat_id AND d.anon = 0) AS sup FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id LEFT JOIN plays p ON p.client = u.client AND p.date = ? WHERE m.group_id = ?").bind(day, gid).all();
   const played = rows.results.filter(r => r.total != null).sort((a, b) => b.total - a.total || a.created - b.created);
   const idle = rows.results.filter(r => r.total == null);
   return { played, idle, members: rows.results.length };
 }
 function boardText(title, day, b) {
   if (!b.played.length) return null;
-  const lines = b.played.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}, ${gradeOf(r.total)} · ${r.total}`);
+  const lines = b.played.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}${r.sup ? " ⭐" : ""}, ${gradeOf(r.total)} · ${r.total}`);
   const idle = b.idle.length ? `\n\nHali o'ynamaganlar: ${b.idle.map(r => r.name || "O'yinchi").join(", ")} 👀` : "";
   return `${title}\n\n${lines.join("\n")}${idle}`;
 }
@@ -227,14 +255,14 @@ async function myGroups(env, client, date) { // for the site: "guruhingizda N-o'
 }
 
 async function tgSetup(env, origin) {
-  const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message", "my_chat_member"], drop_pending_updates: true });
-  const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
+  const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message", "my_chat_member", "pre_checkout_query"], drop_pending_updates: true });
+  const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
   await tg(env, "setMyCommands", { scope: { type: "all_group_chats" }, commands: [{ command: "reyting", description: "Bugungi guruh reytingi" }, { command: "qatnashish", description: "Reytingga qo'shilish" }] });
   const menu = await tg(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "O'ynash", web_app: { url: SITE } } });
   const desc = await tg(env, "setMyDescription", { description: "Sezgir: har kuni 5 ta qisqa idrok testi, 2 daqiqa. Bot har kuni ertalab yangi jumboqni eslatadi va seriyangizni sanaydi." });
   const sdesc = await tg(env, "setMyShortDescription", { short_description: "Ko'zingiz qanchalik aniq? Har kuni 5 ta test." });
-  const me = await tg(env, "getMe", {});
-  return { hook: hook.ok, cmds: cmds.ok, menu: menu.ok, desc: desc.ok && sdesc.ok, username: me.result?.username };
+  const me = await tg(env, "getMe", {}), owner = await tg(env, "getChat", { chat_id: OWNER_ID });
+  return { owner: owner.result?.username === OWNER, hook: hook.ok, cmds: cmds.ok, menu: menu.ok, desc: desc.ok && sdesc.ok, username: me.result?.username };
 }
 
 // Telegram Mini App initData check (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)
@@ -266,6 +294,7 @@ export default {
         const upd = await req.json().catch(() => null);
         if (upd?.message) await onMessage(env, upd.message);
         else if (upd?.my_chat_member) await onMyChatMember(env, upd.my_chat_member);
+        else if (upd?.pre_checkout_query) { const q = upd.pre_checkout_query; await tg(env, "answerPreCheckoutQuery", { pre_checkout_query_id: q.id, ok: q.currency === "XTR" && /^don:[01]$/.test(q.invoice_payload), error_message: "To'lovni qabul qilib bo'lmadi, qayta urinib ko'ring." }); }
         return new Response("ok");
       }
       if (url.pathname === "/tg/setup" && req.method === "GET") {
@@ -278,6 +307,13 @@ export default {
         const client = await whoami(env, b.initData, b.client);
         return client ? json({ client }, 200, h) : json({ error: "forbidden" }, 403, h);
       }
+      if (url.pathname === "/support/invoice" && req.method === "POST") {
+        const b = await req.json().catch(() => null), n = Number(b?.stars);
+        if (!env.TG_BOT_TOKEN || !Number.isInteger(n) || n < 1 || n > 10000) return json({ error: "bad body" }, 400, h);
+        const link = await invoiceLink(env, n, !!b.anon);
+        return link ? json({ link }, 200, h) : json({ error: "telegram" }, 502, h);
+      }
+      if (url.pathname === "/support" && req.method === "GET") return json(await supporters(env), 200, { ...h, "Cache-Control": "public, max-age=30" });
       if (url.pathname === "/stats" && req.method === "GET") {
         const date = url.searchParams.get("date") || todayAround()[1];
         if (!DATE.test(date)) return json({ error: "bad date" }, 400, h);
