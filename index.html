@@ -325,6 +325,9 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .next { text-align: center; color: var(--muted); font-size: 14px; }
 .remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
 .remind:hover { text-decoration: underline; }
+.grow .gpos { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.grow .gpos b { font-weight: 600; font-size: 15px; color: var(--ink); }
+.grow .gpos small { font-size: 12px; color: var(--muted); }
 /* support */
 .tea { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; font: 500 13px var(--font-body); color: var(--gold);
   border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); background: color-mix(in srgb, var(--gold) 9%, var(--surface)); transition: border-color .15s, background .15s; }
@@ -798,7 +801,7 @@ async function globalBlock(box, rec) {
   box.replaceChildren(el("div", "sec-h", "Bugun"), tiles, bars);
   const mg = await api(`/mygroups?client=${clientId()}&date=${rec.date}`);
   if (mg && mg.groups && mg.groups.length) { const gl = el("div", "grp"); gl.append(el("div", "sec-h", "Guruhlar"));
-    mg.groups.forEach(g => { const row = el("div", "grow"); row.append(el("span", "gmed", g.rank ? (["🥇", "🥈", "🥉"][g.rank - 1] || `${g.rank}`) : "–"), el("span", "gname", g.title), el("span", "gpos", g.rank ? `${g.rank}/${g.played}` : "o'ynamagan")); gl.append(row); }); box.append(gl); }
+    mg.groups.forEach(g => { const row = el("div", "grow"); row.append(el("span", "gmed", g.rank ? (["🥇", "🥈", "🥉"][g.rank - 1] || `${g.rank}`) : "–"), el("span", "gname", g.title), (() => { const gp = el("span", "gpos"); if (g.rank) gp.append(el("b", null, `${g.rank}-o'rin`), el("small", null, `${g.played} kishidan`)); else gp.append(el("small", null, "o'ynamagan")); return gp; })()); gl.append(row); }); box.append(gl); }
   else if (BOT) { const p = el("p", "muted"); const a = el("a", null, "Telegram guruhingizga qo'shing"); a.href = `https://t.me/${BOT}?startgroup=1`; a.target = "_blank"; a.rel = "noopener"; p.append("Do'stlar bilan kunlik reyting: botni ", a); box.append(p); } }
 function renderResults(rec) {
   showStage(false); progress.hidden = true; setMeta(rec.no, rec.date);
