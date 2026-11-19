@@ -331,7 +331,7 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .tea:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 15%, var(--surface)); }
 .tea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .tea .s { display: none; }
-@media (max-width: 560px) { .tea .l { display: none; } .tea .s { display: inline; } }
+@media (max-width: 360px) { .tea .l { display: none; } .tea .s { display: inline; } }
 @media (max-width: 400px) { .head-right .meta { display: none; } }
 .sup-card { width: 100%; max-width: 420px; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
   border: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); transition: border-color .15s, background .15s; }
@@ -892,7 +892,7 @@ async function supportPage(back = home) {
   c.append(el("h4", null, "Telegram Stars"), opts, anon, go, note, el("h4", null, "Karta orqali"), card, el("p", "sup-note", "Karta orqali yuborilganlar reytingga avtomatik tushmaydi."), el("h4", null, "Qo'llab-quvvatlovchilar"), list, contact);
   show(c); window.scrollTo(0, 0); loadTop();
 }
-(function teaBtn() { const b = $("#teaBtn"); if (!b || !API || !BOT) return; b.innerHTML = CUP + '<span class="l">Choy olib bering</span><span class="s">Bir choy</span>'; b.hidden = false;
+(function teaBtn() { const b = $("#teaBtn"); if (!b || !API || !BOT) return; b.innerHTML = CUP + '<span class="l">Choy olib bering</span><span class="s">Choy</span>'; b.hidden = false;
   b.addEventListener("click", () => { if (!inGame()) supportPage(home); }); })();
 function home() {
   clearInterval(spTimer);
