@@ -484,7 +484,7 @@ async function globalBlock(box, rec) {
   else st = await api(`/stats?date=${rec.date}&total=${rec.total}`);
   if (!st || !st.players) { box.remove(); return; }
   const others = st.players - 1, mine = Math.min(Math.floor(rec.total / 10), 9), max = Math.max(...st.hist, 1);
-  const head = others > 0 ? `Bugun ${st.players} kishi o'ynadi. Siz ularning ${st.beats}% idan yaxshi natija ko'rsatdingiz.` : "Bugun birinchi bo'lib o'ynadingiz!";
+  const head = others > 0 ? `Bugun ${st.players} kishi o'ynadi. Siz ularning ${st.beats} foizidan yaxshi natija ko'rsatdingiz.` : "Bugun birinchi bo'lib o'ynadingiz!";
   const bars = el("div", "hist"); st.hist.forEach((n, i) => { const col = el("div", "hcol" + (i === mine ? " me" : "")); const bar = el("i"); bar.style.height = `${Math.max(4, n / max * 100)}%`; col.append(bar, el("small", null, String(i * 10))); bars.append(col); });
   box.replaceChildren(el("p", "ghead", head), bars, el("p", "muted", `kunlik o'rtacha ball: ${st.avg} · sizning ustuningiz ajratilgan`)); }
 function renderResults(rec) {
