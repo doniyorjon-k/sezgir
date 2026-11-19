@@ -917,13 +917,14 @@ function home() {
   try { T.ready(); T.expand(); if (T.isVersionAtLeast("7.7")) T.disableVerticalSwipes(); if (T.isVersionAtLeast("8.0") && /^(ios|android|android_x)$/.test(T.platform)) T.requestFullscreen(); } catch {}
   paint(); new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();
+const OPEN_SUPPORT = new URLSearchParams(location.search).has("qollab"); // read before readChallenge() clears the query
 readChallenge();
 // Opened from the bot's menu button there is no ?cid=, so ask the bot which client belongs to this Telegram user;
 // a play already made under another local id is sent again under the right one so groups count it.
 (async function boot() { const T = window.Telegram && window.Telegram.WebApp;
   if (T && T.initData && API) { const r = await Promise.race([api("/tg/whoami", { initData: T.initData, client: clientId() }), new Promise(ok => setTimeout(ok, 1500))]);
     if (r && /^[a-z0-9]{16,40}$/.test(r.client) && r.client !== clientId()) { store.set("client", r.client); const h = store.get("history", {}); for (const k of Object.keys(h)) h[k].sent = false; store.set("history", h); } }
-  if (new URLSearchParams(location.search).get("qollab") && API && BOT) supportPage(home); else home();
+  if (OPEN_SUPPORT && API && BOT) supportPage(home); else home();
 })();
 })();
 </script>
