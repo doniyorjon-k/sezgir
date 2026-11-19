@@ -370,7 +370,7 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 <div class="wrap">
   <header>
     <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" href="#statistika"></a>
-    <div class="head-right"><button class="tea" id="teaBtn" type="button" hidden title="Muallifga bir choy olib bering"></button><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
+    <div class="head-right"><button class="tea" id="teaBtn" type="button" hidden title="Sezgir'ni qo'llab-quvvatlash"></button><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="statbar" class="statbar" hidden></div>
   <div id="progress" hidden></div>
@@ -858,13 +858,13 @@ function howTo(focusId) {
 }
 // ---------- Support: Telegram Stars (via the bot's invoice) and a card number ----------
 const DONATE_CARD = { no: "5614 6887 0540 3722", owner: "D.Q." };
-const CUP = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5v-4Z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8.5 3.5c-.6.8-.6 1.7 0 2.5M12 3.5c-.6.8-.6 1.7 0 2.5"/></svg>';
-function supportCard(back) { const b = el("button", "sup-card"); b.type = "button"; const ic = el("span", "sup-ico"); ic.innerHTML = CUP; const mid = el("span"); mid.append(el("b", null, "Yoqdimi? Muallifga bir choy olib bering"), el("small", null, "Sezgir bepul va reklamasiz. Telegram Stars yoki karta orqali.")); const ch = el("span", "chev"); ch.innerHTML = ARROW_R; b.append(ic, mid, ch); b.addEventListener("click", () => supportPage(back)); return b; }
+const HEART = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 20.3s-7.3-4.5-7.3-10.2A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.3 2.5c0 5.7-7.3 10.2-7.3 10.2Z"/></svg>';
+function supportCard(back) { const b = el("button", "sup-card"); b.type = "button"; const ic = el("span", "sup-ico"); ic.innerHTML = HEART; const mid = el("span"); mid.append(el("b", null, "Yoqdimi? Sezgir'ni qo'llab-quvvatlang"), el("small", null, "Sezgir bepul va reklamasiz. Telegram Stars yoki karta orqali.")); const ch = el("span", "chev"); ch.innerHTML = ARROW_R; b.append(ic, mid, ch); b.addEventListener("click", () => supportPage(back)); return b; }
 async function supportPage(back = home) {
   showStage(false); progress.hidden = true; setMeta(todayNo, today);
   const c = el("section", "card sup-page"); const tally = el("p", "sup-tally"); tally.hidden = true;
-  c.append(backLink(back === home ? "Bosh sahifa" : "Natija", back), el("div", "step", "Qo'llab-quvvatlash"), el("h2", null, "Muallifga bir choy olib bering"),
-    el("p", "lead", "Sezgir bepul va reklamasiz. Bir choylik yordamingiz server, yangi testlar va har kungi jumboqlarga ketadi. Har qanday miqdor uchun rahmat!"), tally);
+  c.append(backLink(back === home ? "Bosh sahifa" : "Natija", back), el("div", "step", "Qo'llab-quvvatlash"), el("h2", null, "Sezgir'ni qo'llab-quvvatlang"),
+    el("p", "lead", "Sezgir bepul va reklamasiz. Yordamingiz server, yangi testlar va har kungi jumboqlarga ketadi. Har qanday miqdor uchun rahmat!"), tally);
   // Stars
   let n = 10; const opts = el("div", "stars"), inp = el("input", "star-in"); inp.type = "number"; inp.min = 1; inp.max = 10000; inp.inputMode = "numeric"; inp.placeholder = "Miqdor"; inp.hidden = true; inp.setAttribute("aria-label", "Stars miqdori");
   const go = btn("", true, () => pay()); go.classList.remove("primary"); go.classList.add("gold", "big");
@@ -892,7 +892,7 @@ async function supportPage(back = home) {
   c.append(el("h4", null, "Telegram Stars"), opts, anon, go, note, el("h4", null, "Karta orqali"), card, el("p", "sup-note", "Karta orqali yuborilganlar reytingga avtomatik tushmaydi."), el("h4", null, "Qo'llab-quvvatlovchilar"), list, contact);
   show(c); window.scrollTo(0, 0); loadTop();
 }
-(function teaBtn() { const b = $("#teaBtn"); if (!b || !API || !BOT) return; b.innerHTML = CUP + '<span class="l">Choy olib bering</span><span class="s">Choy</span>'; b.hidden = false;
+(function teaBtn() { const b = $("#teaBtn"); if (!b || !API || !BOT) return; b.innerHTML = HEART + '<span class="l">Qo\'llab-quvvatlash</span><span class="s">Yordam</span>'; b.hidden = false;
   b.addEventListener("click", () => { if (!inGame()) supportPage(home); }); })();
 function home() {
   clearInterval(spTimer);
