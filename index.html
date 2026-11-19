@@ -140,8 +140,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .statbar small { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
 .global { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
 .global .ghead { font-weight: 500; }
-.global .muted, .home-live { color: var(--muted); font-size: 13px; }
-.home-live:empty { display: none; }
+.global .muted { color: var(--muted); font-size: 13px; }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; height: 90px; align-items: end; max-width: 420px; width: 100%; margin: 0 auto; }
 .hcol { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
 .hcol i { width: 100%; background: var(--line); border-radius: 4px 4px 0 0; display: block; }
@@ -576,7 +575,6 @@ function home() {
   const c = el("section", "home"); const d = new Date();
   const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); icons.append(x); });
   c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
-  if (API) { const live = el("div", "home-live"); c.append(live); api(`/stats?date=${today}`).then(st => { if (st && st.players) live.textContent = `Bugun ${st.players} kishi o'ynadi · o'rtacha ball ${st.avg}`; }); }
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); x.append(icon(t, 20), el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
