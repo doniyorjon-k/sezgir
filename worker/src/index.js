@@ -53,11 +53,100 @@ async function summary(env, n = 14) { // last n days: visitors and players per d
   return { days, allVisitors: tot.c };
 }
 
+
+// ---------- Telegram bot: daily reminders + streak ----------
+const SITE = "https://sezgir.github.io/";
+const LAUNCH = Date.UTC(2026, 10, 12); // #1
+const puzzleNo = day => Math.round((Date.parse(day + "T00:00:00Z") - LAUNCH) / 864e5) + 1;
+const shiftDay = (day, n) => new Date(Date.parse(day + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+const newClient = () => { const a = crypto.getRandomValues(new Uint8Array(24)); return Array.from(a, b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join(""); };
+
+async function tg(env, method, body) {
+  const r = await fetch(`${env.TG_API || "https://api.telegram.org"}/bot${env.TG_BOT_TOKEN}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json().catch(() => ({ ok: false }));
+}
+const playBtn = (client, label = "O'ynash") => ({ inline_keyboard: [[{ text: label, web_app: { url: `${SITE}?cid=${client}` } }]] });
+
+async function streakOf(env, client) { // consecutive days played, counting today or ending yesterday
+  if (!client) return { streak: 0, todayRec: null };
+  const today = tzDay();
+  const rows = await env.DB.prepare("SELECT date, total FROM plays WHERE client = ? AND date >= ? ORDER BY date DESC").bind(client, shiftDay(today, -400)).all();
+  const set = new Map(rows.results.map(r => [r.date, r.total]));
+  let d = set.has(today) ? today : shiftDay(today, -1), streak = 0;
+  while (set.has(d)) { streak++; d = shiftDay(d, -1); }
+  return { streak, todayRec: set.has(today) ? set.get(today) : null };
+}
+
+async function onMessage(env, msg) {
+  const chat = msg.chat?.id, text = (msg.text || "").trim();
+  if (!chat || msg.chat.type !== "private") return;
+  const name = (msg.from?.first_name || "").slice(0, 40);
+  const [cmd, arg] = text.split(/\s+/, 2);
+  let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
+  if (cmd === "/start") {
+    const client = arg && CLIENT.test(arg) ? arg : (u?.client || newClient());
+    await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET client = excluded.client, name = excluded.name, active = 1").bind(chat, client, name, Date.now()).run();
+    const { streak } = await streakOf(env, client);
+    const linked = arg && CLIENT.test(arg) ? `\n\nSaytdagi natijalaringiz ulandi${streak ? `, seriyangiz: ${streak} kun 🔥` : ""}.` : "";
+    await tg(env, "sendMessage", { chat_id: chat, text: `Salom${name ? ", " + name : ""}! Men Sezgir botiman.\n\nHar kuni soat 9:00 da yangi jumboq tayyor bo'lganini eslataman. Kechqurun hali o'ynamagan bo'lsangiz, seriyangiz uzilmasligi uchun yana bir marta yozaman.${linked}\n\n/natija — bugungi holatingiz\n/stop — eslatmalarni o'chirish`, reply_markup: playBtn(client) });
+    return;
+  }
+  if (cmd === "/stop") {
+    await env.DB.prepare("UPDATE tg_users SET active = 0 WHERE chat_id = ?").bind(chat).run();
+    await tg(env, "sendMessage", { chat_id: chat, text: "Eslatmalar o'chirildi. Qayta yoqish uchun /start bosing." });
+    return;
+  }
+  if (!u) { u = { client: newClient() }; await env.DB.prepare("INSERT OR IGNORE INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?)").bind(chat, u.client, name, Date.now()).run(); }
+  if (cmd === "/natija") {
+    const day = tzDay(), { streak, todayRec } = await streakOf(env, u.client);
+    const agg = await env.DB.prepare("SELECT COUNT(*) AS n, ROUND(AVG(total)) AS avg FROM plays WHERE date = ?").bind(day).first();
+    const mine = todayRec != null ? `Bugun ${todayRec} ball oldingiz.` : "Bugun hali o'ynamadingiz.";
+    await tg(env, "sendMessage", { chat_id: chat, text: `Sezgir #${puzzleNo(day)}\n${mine}\nSeriya: ${streak} kun${streak ? " 🔥" : ""}\n\nBugun ${agg.n} kishi o'ynadi${agg.n ? `, o'rtacha ball ${agg.avg}` : ""}.`, reply_markup: todayRec == null ? playBtn(u.client) : undefined });
+    return;
+  }
+  await tg(env, "sendMessage", { chat_id: chat, text: "Pastdagi tugma bilan bugungi jumboqni oching.\n\n/natija — bugungi holatingiz\n/stop — eslatmalarni o'chirish", reply_markup: playBtn(u.client) });
+}
+
+async function remind(env, evening) {
+  const day = tzDay(), no = puzzleNo(day);
+  const users = await env.DB.prepare("SELECT chat_id, client FROM tg_users WHERE active = 1").all();
+  for (const u of users.results) {
+    const { streak, todayRec } = await streakOf(env, u.client);
+    let text;
+    if (!evening) text = `☀️ Sezgir #${no} tayyor. Bugungi beshta test sizni kutmoqda.${streak ? `\nSeriyangiz: ${streak} kun 🔥` : ""}`;
+    else if (todayRec == null && streak > 0) text = `Bugun hali o'ynamadingiz. ${streak} kunlik seriyangiz yarim tunda uziladi 🔥`;
+    if (!text) continue;
+    const r = await tg(env, "sendMessage", { chat_id: u.chat_id, text, reply_markup: playBtn(u.client) });
+    if (!r.ok && r.error_code === 403) await env.DB.prepare("UPDATE tg_users SET active = 0 WHERE chat_id = ?").bind(u.chat_id).run();
+    await new Promise(res => setTimeout(res, 40)); // stay under Telegram's ~30 msg/s
+  }
+}
+
+async function tgSetup(env, origin) {
+  const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message"], drop_pending_updates: true });
+  const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
+  const menu = await tg(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "O'ynash", web_app: { url: SITE } } });
+  const desc = await tg(env, "setMyDescription", { description: "Sezgir: har kuni 5 ta qisqa idrok testi, 2 daqiqa. Bot har kuni ertalab yangi jumboqni eslatadi va seriyangizni sanaydi." });
+  const sdesc = await tg(env, "setMyShortDescription", { short_description: "Ko'zingiz qanchalik aniq? Har kuni 5 ta test." });
+  const me = await tg(env, "getMe", {});
+  return { hook: hook.ok, cmds: cmds.ok, menu: menu.ok, desc: desc.ok && sdesc.ok, username: me.result?.username };
+}
+
 export default {
   async fetch(req, env) {
     const h = cors(req, env), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
     try {
+      if (url.pathname === "/tg/hook" && req.method === "POST") {
+        if (!env.TG_BOT_TOKEN || req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TG_WEBHOOK_SECRET) return new Response("forbidden", { status: 403 });
+        const upd = await req.json().catch(() => null);
+        if (upd?.message) await onMessage(env, upd.message);
+        return new Response("ok");
+      }
+      if (url.pathname === "/tg/setup" && req.method === "GET") {
+        if (!env.TG_BOT_TOKEN || !env.TG_WEBHOOK_SECRET || url.searchParams.get("key") !== env.TG_WEBHOOK_SECRET) return json({ error: "forbidden" }, 403, h);
+        return json(await tgSetup(env, url.origin), 200, h);
+      }
       if (url.pathname === "/stats" && req.method === "GET") {
         const date = url.searchParams.get("date") || todayAround()[1];
         if (!DATE.test(date)) return json({ error: "bad date" }, 400, h);
@@ -83,5 +172,9 @@ export default {
       }
       return json({ error: "not found" }, 404, h);
     } catch (e) { return json({ error: "server error" }, 500, h); }
+  },
+  async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening)
+    if (!env.TG_BOT_TOKEN) return;
+    ctx.waitUntil(remind(env, event.cron === "0 14 * * *"));
   },
 };

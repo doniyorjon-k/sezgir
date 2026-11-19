@@ -17,3 +17,12 @@ CREATE TABLE IF NOT EXISTS visits (
   PRIMARY KEY (date, client)
 );
 CREATE INDEX IF NOT EXISTS visits_last ON visits (last);
+
+-- Telegram bot subscribers (daily reminders)
+CREATE TABLE IF NOT EXISTS tg_users (
+  chat_id INTEGER PRIMARY KEY,
+  client  TEXT,                      -- player id the reminders and streak are tied to
+  name    TEXT,
+  active  INTEGER NOT NULL DEFAULT 1,
+  created INTEGER NOT NULL
+);
