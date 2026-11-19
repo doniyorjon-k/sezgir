@@ -2,5 +2,7 @@
 
 Har kuni 5 ta qisqa idrok testi: Anor donalari, Chillak, Minora, Doira va Non bo'lish.
 
-Bitta statik sahifa (`index.html`), server talab qilmaydi. GitHub Pages orqali joylashtiriladi:
-Settings → Pages → Source: "Deploy from a branch" → `main` / `(root)`.
+Sayt: https://sezgir.github.io
+
+- `index.html`: butun o'yin (bitta statik sahifa), GitHub Pages orqali `main` / `(root)` dan joylashtiriladi.
+- `worker/`: umumiy statistika serveri (Cloudflare Worker + D1), manzili `https://sezgir-api.sezgir-uz.workers.dev`.
