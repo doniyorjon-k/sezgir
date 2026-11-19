@@ -404,7 +404,7 @@ const today = ymd(), todayNo = puzzleNo(today);
 const now = new Date();
 $("#meta").textContent = `#${todayNo} · ${now.getDate()}-${MONTHS[now.getMonth()]}`;
 function show(...nodes) { screen.replaceChildren(...nodes); paintStatBar(); }
-function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden) { bar.hidden = true; return; }
+function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden || screen.querySelector(".home")) { bar.hidden = true; return; }
   const st = statsOf(); const todayRec = store.get("history", {})[today];
   const items = [["O'yinlar", st.played], ["Ketma-ket", st.streak, st.streak > 0], ["Eng yaxshi", st.best ? `${grade(st.best)} · ${st.best}` : "–"], ["Bugun", todayRec ? `${grade(todayRec.total)} · ${todayRec.total}` : "–", !!todayRec]];
   bar.replaceChildren(...items.map(([k, v, hot]) => { const d = el("div"); const b = el("b", hot ? "hot" : null, String(v)); d.append(b, el("small", null, k)); return d; })); bar.hidden = false; }
