@@ -8,4 +8,4 @@ database_name = "sezgir"
 database_id = "c8b83d4c-775d-400b-b9bd-43d5f811ad87"
 
 [vars]
-ALLOWED_ORIGINS = "https://doniyorjon-k.github.io"
+ALLOWED_ORIGINS = "https://doniyorjon-k.github.io,https://sezgir.github.io"
