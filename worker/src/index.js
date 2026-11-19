@@ -231,6 +231,17 @@ async function announcePlay(env, client, date, total) { // "Aziz o'ynadi" in eac
   }
 }
 
+async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note in each group, with yesterday's winner
+  const day = tzDay(), yday = shiftDay(day, -1);
+  const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all();
+  for (const g of groups.results) {
+    const w = (await groupBoard(env, g.chat_id, yday)).played[0];
+    const text = `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?${w ? `\nKechagi g'olib: 🥇 ${w.name || "O'yinchi"}, ${gradeOf(w.total)} · ${w.total}` : ""}`;
+    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
+    if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
+    await new Promise(res => setTimeout(res, 40));
+  }
+}
 async function postBoards(env) { // 21:00 Tashkent: daily board; on Sunday also the week's winner
   const day = tzDay(), sunday = new Date(day + "T12:00:00Z").getUTCDay() === 0;
   const groups = await env.DB.prepare("SELECT chat_id, title FROM tg_groups WHERE active = 1").all();
@@ -349,6 +360,7 @@ export default {
   async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
     if (!env.TG_BOT_TOKEN) return;
     if (event.cron === "0 16 * * *") ctx.waitUntil(postBoards(env));
-    else ctx.waitUntil(remind(env, event.cron === "0 14 * * *"));
+    else if (event.cron === "0 4 * * *") ctx.waitUntil(Promise.all([remind(env, false), morningGroups(env)]));
+    else ctx.waitUntil(remind(env, true));
   },
 };
