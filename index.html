@@ -309,10 +309,14 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .hero .num span { font-size: 18px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 5px 14px; border-radius: 999px; }
 .hero p { color: var(--muted); font-size: 14px; }
 .rows { display: flex; flex-direction: column; gap: 8px; }
-.rrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.rrow { border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; }
+.rrow summary { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: center; cursor: pointer; list-style: none; }
+.rrow summary::-webkit-details-marker { display: none; }
+.rrow[open] { background: var(--surface); }
+.rrow > .det { padding: 8px 0 2px 36px; }
 .rrow .nm { font-weight: 500; }
 .rrow .det { color: var(--muted); font-size: 13px; }
-.rrow .pts { font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; text-align: right; }
+.rrow .pts { font-size: 20px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; text-align: right; }
 .rrow .tier { font-size: 15px; font-weight: 600; color: var(--muted); width: 28px; text-align: right; }
 .center-row { justify-content: center; }
 .btn.big { padding: 14px 32px; font-size: 15px; }
@@ -761,19 +765,18 @@ function renderResults(rec) {
   const c = el("section", "card result-card");
   const hero = el("div", "hero"); const num = el("div", "num"); num.append(el("b", "grade", grade(rec.total)), el("div", "num-side")); num.lastChild.append(el("strong", null, `${rec.total} ball`), el("span", null, title(rec.total)));
   hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num); c.append(hero);
-  if (API && rec.date === today) { const g = el("div", "global"); g.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); c.append(g); globalBlock(g, rec); }
-  const ts = testsOf(rec); c.append(el("div", "sec-h", "Testlar"));
-  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); const nm = el("div", "nm", t.name); if (r.v && r.v !== "classic" && t.variants) nm.append(el("span", "usul", variantName(t, r.v))); const meter = el("div", "meter"); const fillm = el("i"); fillm.style.width = `${r.score}%`; fillm.style.background = `var(${t.color})`; meter.append(fillm); mid.append(nm, meter, el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
+  let globalEl = null; if (API && rec.date === today) { globalEl = el("div", "global"); globalEl.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); globalBlock(globalEl, rec); }
+  const ts = testsOf(rec); const testsH = el("div", "sec-h", "Testlar · batafsil uchun bosing");
+  const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("details", "rrow"); const sum = el("summary"); const mid = el("div"); const nm = el("div", "nm", t.name); if (r.v && r.v !== "classic" && t.variants) nm.append(el("span", "usul", variantName(t, r.v))); const meter = el("div", "meter"); const fillm = el("i"); fillm.style.width = `${r.score}%`; fillm.style.background = `var(${t.color})`; meter.append(fillm); mid.append(nm, meter); sum.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); row.append(sum, el("div", "det", r.human)); rows.append(row); });
   const v = rec.date === today ? activeVs() : null; if (v) c.append(vsBlock(rec, v));
   const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : (inTg() && BOT ? botLink(null) : SITE);
   const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
-  const prev = el("img", "share-prev"); prev.alt = "Ulashiladigan natija kartasi"; drawCard(rec).then(cv2 => { prev.src = cv2.toDataURL("image/png"); }); sb.append(prev);
   if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; if (!store.get("name", "") && inTg()) { const u = window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user; if (u && u.first_name) store.set("name", u.first_name.replace(/[<>]/g, "").trim().slice(0, 24)); } ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
   const img = btn("Rasm bilan ulashish", false, () => shareImage(rec, link()));
   const tg = el("a", "btn primary big tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append(isToday ? "Do'stim bilan o'ynash" : "Do'stimga yuborish"); tg.target = "_blank"; tg.rel = "noopener";
   const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(tgText(rec, isToday)); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
   tg.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); setTg(); T.openTelegramLink(tg.href); } });
-  const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img); sb.append(s1, s2); c.append(sb);
+  const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img); sb.append(s1, s2); c.append(sb); if (globalEl) c.append(globalEl); c.append(testsH, rows);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`));
     if (BOT) { const a = el("a", "remind"); a.href = `https://t.me/${BOT}?start=${clientId()}`; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>'; a.append("Har kuni Telegram'da eslatib turaylikmi?"); c.append(a); } }
