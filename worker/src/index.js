@@ -79,10 +79,13 @@ async function streakOf(env, client) { // consecutive days played, counting toda
 
 async function onMessage(env, msg) {
   const chat = msg.chat?.id, text = (msg.text || "").trim();
-  if (!chat || msg.chat.type !== "private") return;
+  if (!chat) return;
+  if (msg.chat.type === "group" || msg.chat.type === "supergroup") return onGroupMessage(env, msg);
+  if (msg.chat.type !== "private") return;
   const name = (msg.from?.first_name || "").slice(0, 40);
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
+  if (cmd === "/start" && arg && /^g-?\d{1,20}$/.test(arg)) return joinGroup(env, chat, name, u, Number(arg.slice(1)));
   if (cmd === "/start") {
     const client = arg && CLIENT.test(arg) ? arg : (u?.client || newClient());
     await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET client = excluded.client, name = excluded.name, active = 1").bind(chat, client, name, Date.now()).run();
@@ -122,9 +125,97 @@ async function remind(env, evening) {
   }
 }
 
+
+// ---------- Telegram groups: shared daily leaderboard ----------
+const BOT_USER = "sezgiruz_bot";
+const gradeOf = s => s >= 95 ? "A+" : s >= 88 ? "A" : s >= 80 ? "B+" : s >= 70 ? "B" : s >= 62 ? "C+" : s >= 55 ? "C" : s >= 40 ? "D" : "F";
+const joinBtn = gid => ({ inline_keyboard: [[{ text: "Qatnashish", url: `https://t.me/${BOT_USER}?start=g${gid}` }]] });
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+async function groupBoard(env, gid, day) { // members who played `day`, best first; plus members who did not
+  const rows = await env.DB.prepare("SELECT u.chat_id, u.name, p.total, p.created FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id LEFT JOIN plays p ON p.client = u.client AND p.date = ? WHERE m.group_id = ?").bind(day, gid).all();
+  const played = rows.results.filter(r => r.total != null).sort((a, b) => b.total - a.total || a.created - b.created);
+  const idle = rows.results.filter(r => r.total == null);
+  return { played, idle, members: rows.results.length };
+}
+function boardText(title, day, b) {
+  if (!b.played.length) return null;
+  const lines = b.played.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}, ${gradeOf(r.total)} · ${r.total}`);
+  const idle = b.idle.length ? `\n\nHali o'ynamaganlar: ${b.idle.map(r => r.name || "O'yinchi").join(", ")} 👀` : "";
+  return `${title}\n\n${lines.join("\n")}${idle}`;
+}
+
+async function joinGroup(env, chat, name, u, gid) {
+  const g = await env.DB.prepare("SELECT * FROM tg_groups WHERE chat_id = ? AND active = 1").bind(gid).first();
+  if (!g) { await tg(env, "sendMessage", { chat_id: chat, text: "Bu guruh topilmadi. Botni guruhga qayta qo'shib ko'ring." }); return; }
+  const client = u?.client || newClient();
+  await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET name = excluded.name").bind(chat, client, name, Date.now()).run();
+  const fresh = await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(gid, chat, Date.now()).run();
+  await tg(env, "sendMessage", { chat_id: chat, text: `Siz «${g.title}» guruhi reytingiga qo'shildingiz ✅\n\nO'ynaganingizdan keyin natijangiz guruhda ko'rinadi. Har kuni 21:00 da bot guruhga kunlik reytingni yozadi.\n\nMuhim: natija hisobga olinishi uchun pastdagi tugma orqali o'ynang.`, reply_markup: playBtn(client) });
+  if (fresh.meta?.changes) await tg(env, "sendMessage", { chat_id: gid, text: `${name || "Yangi o'yinchi"} reytingga qo'shildi 👋` });
+}
+
+async function onGroupMessage(env, msg) {
+  const gid = msg.chat.id, text = (msg.text || "").trim();
+  const cmd = text.split(/\s+/)[0].toLowerCase().replace(`@${BOT_USER}`, "");
+  if (msg.migrate_to_chat_id) { await env.DB.prepare("UPDATE tg_groups SET chat_id = ? WHERE chat_id = ?").bind(msg.migrate_to_chat_id, gid).run(); await env.DB.prepare("UPDATE tg_members SET group_id = ? WHERE group_id = ?").bind(msg.migrate_to_chat_id, gid).run(); return; }
+  if (!cmd.startsWith("/")) return;
+  await env.DB.prepare("INSERT INTO tg_groups (chat_id, title, active, created) VALUES (?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, active = 1").bind(gid, (msg.chat.title || "Guruh").slice(0, 60), Date.now()).run();
+  if (cmd === "/reyting") {
+    const day = tzDay(), b = await groupBoard(env, gid, day);
+    const t = boardText(`Sezgir #${puzzleNo(day)} · bugungi reyting`, day, b);
+    await tg(env, "sendMessage", { chat_id: gid, text: t || (b.members ? "Bugun hali hech kim o'ynamadi. Birinchi bo'ling!" : "Reytingda hali hech kim yo'q. Qatnashish uchun tugmani bosing."), reply_markup: joinBtn(gid) });
+    return;
+  }
+  if (cmd === "/qatnashish") await tg(env, "sendMessage", { chat_id: gid, text: "Guruh reytingiga qo'shilish uchun tugmani bosing. Bot sizga shaxsiy xabarda o'yin havolasini yuboradi.", reply_markup: joinBtn(gid) });
+}
+
+async function onMyChatMember(env, upd) {
+  const chat = upd.chat; if (!chat || (chat.type !== "group" && chat.type !== "supergroup")) return;
+  const st = upd.new_chat_member?.status;
+  if (st === "member" || st === "administrator") {
+    await env.DB.prepare("INSERT INTO tg_groups (chat_id, title, active, created) VALUES (?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, active = 1").bind(chat.id, (chat.title || "Guruh").slice(0, 60), Date.now()).run();
+    if (upd.old_chat_member?.status === "left" || upd.old_chat_member?.status === "kicked")
+      await tg(env, "sendMessage", { chat_id: chat.id, text: `Salom, «${chat.title || "guruh"}»! Men Sezgir botiman 👋\n\nHar kuni 5 ta qisqa idrok testi. Kim o'ynasa, natijasini shu yerga yozaman, 21:00 da esa kunlik reytingni chiqaraman. Yakshanba kuni haftaning g'olibini e'lon qilaman.\n\nQatnashish uchun pastdagi tugmani bosing.\n/reyting — bugungi reyting`, reply_markup: joinBtn(chat.id) });
+  } else if (st === "left" || st === "kicked") await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(chat.id).run();
+}
+
+async function announcePlay(env, client, date, total) { // "Aziz o'ynadi" in each of the player's groups
+  if (!env.TG_BOT_TOKEN || date !== tzDay()) return;
+  const rows = await env.DB.prepare("SELECT g.chat_id AS gid, u.name, u.chat_id AS uid FROM tg_users u JOIN tg_members m ON m.user_id = u.chat_id JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1 WHERE u.client = ?").bind(client).all();
+  for (const r of rows.results) {
+    const b = await groupBoard(env, r.gid, date); const rank = b.played.findIndex(p => p.chat_id === r.uid) + 1;
+    await tg(env, "sendMessage", { chat_id: r.gid, text: `${r.name || "O'yinchi"} o'ynadi: ${gradeOf(total)} · ${total} ball${rank ? ` (hozircha ${rank}-o'rin, ${b.played.length} kishidan)` : ""}` });
+  }
+}
+
+async function postBoards(env) { // 21:00 Tashkent: daily board; on Sunday also the week's winner
+  const day = tzDay(), sunday = new Date(day + "T12:00:00Z").getUTCDay() === 0;
+  const groups = await env.DB.prepare("SELECT chat_id, title FROM tg_groups WHERE active = 1").all();
+  for (const g of groups.results) {
+    const b = await groupBoard(env, g.chat_id, day);
+    const t = boardText(`Sezgir #${puzzleNo(day)} · kun yakuni`, day, b);
+    if (t) { const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text: t + "\n\nErtaga 9:00 da yangi jumboq.", reply_markup: joinBtn(g.chat_id) }); if (!r.ok && (r.error_code === 403 || r.error_code === 400)) { await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run(); continue; } }
+    if (sunday) {
+      const from = shiftDay(day, -6);
+      const w = await env.DB.prepare("SELECT u.name, SUM(p.total) AS sum, COUNT(*) AS days FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id JOIN plays p ON p.client = u.client AND p.date BETWEEN ? AND ? WHERE m.group_id = ? GROUP BY u.chat_id ORDER BY sum DESC LIMIT 5").bind(from, day, g.chat_id).all();
+      if (w.results.length) await tg(env, "sendMessage", { chat_id: g.chat_id, text: `🏆 Haftaning g'olibi: ${w.results[0].name || "O'yinchi"}!\n\n${w.results.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}: ${r.sum} ball (${r.days} kun)`).join("\n")}\n\nHaftalik hisob: 7 kunlik ballar yig'indisi, shuning uchun har kuni o'ynash muhim.` });
+    }
+    await new Promise(res => setTimeout(res, 50));
+  }
+}
+
+async function myGroups(env, client, date) { // for the site: "guruhingizda N-o'rindasiz"
+  const rows = await env.DB.prepare("SELECT g.chat_id AS gid, g.title, u.chat_id AS uid FROM tg_users u JOIN tg_members m ON m.user_id = u.chat_id JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1 WHERE u.client = ?").bind(client).all();
+  const out = [];
+  for (const r of rows.results.slice(0, 5)) { const b = await groupBoard(env, r.gid, date); const i = b.played.findIndex(p => p.chat_id === r.uid); out.push({ title: r.title, rank: i >= 0 ? i + 1 : null, played: b.played.length, members: b.members, leader: b.played[0] ? { name: b.played[0].name, total: b.played[0].total } : null }); }
+  return out;
+}
+
 async function tgSetup(env, origin) {
-  const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message"], drop_pending_updates: true });
+  const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message", "my_chat_member"], drop_pending_updates: true });
   const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
+  await tg(env, "setMyCommands", { scope: { type: "all_group_chats" }, commands: [{ command: "reyting", description: "Bugungi guruh reytingi" }, { command: "qatnashish", description: "Reytingga qo'shilish" }] });
   const menu = await tg(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "O'ynash", web_app: { url: SITE } } });
   const desc = await tg(env, "setMyDescription", { description: "Sezgir: har kuni 5 ta qisqa idrok testi, 2 daqiqa. Bot har kuni ertalab yangi jumboqni eslatadi va seriyangizni sanaydi." });
   const sdesc = await tg(env, "setMyShortDescription", { short_description: "Ko'zingiz qanchalik aniq? Har kuni 5 ta test." });
@@ -133,7 +224,7 @@ async function tgSetup(env, origin) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const h = cors(req, env), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
     try {
@@ -141,6 +232,7 @@ export default {
         if (!env.TG_BOT_TOKEN || req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TG_WEBHOOK_SECRET) return new Response("forbidden", { status: 403 });
         const upd = await req.json().catch(() => null);
         if (upd?.message) await onMessage(env, upd.message);
+        else if (upd?.my_chat_member) await onMyChatMember(env, upd.my_chat_member);
         return new Response("ok");
       }
       if (url.pathname === "/tg/setup" && req.method === "GET") {
@@ -152,6 +244,11 @@ export default {
         if (!DATE.test(date)) return json({ error: "bad date" }, 400, h);
         const t = url.searchParams.get("total"); const total = t === null ? undefined : parseInt(t, 10);
         return json(await stats(env, date, total), 200, { ...h, "Cache-Control": "public, max-age=30" });
+      }
+      if (url.pathname === "/mygroups" && req.method === "GET") {
+        const client = url.searchParams.get("client") || "", date = url.searchParams.get("date") || tzDay();
+        if (!CLIENT.test(client) || !DATE.test(date)) return json({ error: "bad query" }, 400, h);
+        return json({ groups: await myGroups(env, client, date) }, 200, h);
       }
       if (url.pathname === "/live" && req.method === "GET") return json(await live(env), 200, { ...h, "Cache-Control": "public, max-age=20" });
       if (url.pathname === "/summary" && req.method === "GET") return json(await summary(env, Math.min(Math.max(parseInt(url.searchParams.get("days") || "14", 10) || 14, 7), 60)), 200, { ...h, "Cache-Control": "public, max-age=60" });
@@ -167,14 +264,16 @@ export default {
         if (!todayAround().includes(b.date)) return json({ error: "only today's puzzle counts" }, 400, h);
         const scores = b.scores.map(Number); if (scores.some(s => !Number.isInteger(s) || s < 0 || s > 100)) return json({ error: "bad scores" }, 400, h);
         const total = Math.round(scores.reduce((a, s) => a + s, 0) / 5);
-        await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, b.client, total, JSON.stringify(scores), Date.now()).run();
+        const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, b.client, total, JSON.stringify(scores), Date.now()).run();
+        if (ins.meta?.changes) ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {}));
         return json(await stats(env, b.date, total), 200, h);
       }
       return json({ error: "not found" }, 404, h);
     } catch (e) { return json({ error: "server error" }, 500, h); }
   },
-  async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening)
+  async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
     if (!env.TG_BOT_TOKEN) return;
-    ctx.waitUntil(remind(env, event.cron === "0 14 * * *"));
+    if (event.cron === "0 16 * * *") ctx.waitUntil(postBoards(env));
+    else ctx.waitUntil(remind(env, event.cron === "0 14 * * *"));
   },
 };

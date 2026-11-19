@@ -26,3 +26,18 @@ CREATE TABLE IF NOT EXISTS tg_users (
   active  INTEGER NOT NULL DEFAULT 1,
   created INTEGER NOT NULL
 );
+
+-- Telegram groups with a shared daily leaderboard
+CREATE TABLE IF NOT EXISTS tg_groups (
+  chat_id INTEGER PRIMARY KEY,       -- negative Telegram group id
+  title   TEXT,
+  active  INTEGER NOT NULL DEFAULT 1,
+  created INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tg_members (
+  group_id INTEGER NOT NULL,
+  user_id  INTEGER NOT NULL,         -- = tg_users.chat_id (private chat id)
+  joined   INTEGER NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS tg_members_user ON tg_members (user_id);
