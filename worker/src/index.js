@@ -151,6 +151,15 @@ async function onPaid(env, msg) {
   if (msg.from.id !== OWNER_ID) await tg(env, "sendMessage", { chat_id: OWNER_ID, text: `💛 Yangi qo'llab-quvvatlash: ${name}${msg.from.username ? ` (@${msg.from.username})` : ""}, ${p.total_amount} ⭐${anon ? " · yashirin" : ""}\nUning jami: ${sum.s} ⭐` });
   await tg(env, "sendMessage", { chat_id: msg.chat.id, text: `Katta rahmat, ${msg.from?.first_name || "do'stim"}! ${p.total_amount} ⭐ qabul qilindi 💛\n\nJami qo'llab-quvvatlovingiz: ${sum.s} ⭐.${anon ? " Ismingiz reytingda ko'rinmaydi." : " Endi guruh reytinglarida ismingiz yonida ⭐ turadi."}` });
 }
+const ASK_DAYS = 5;
+async function maybeAskSupport(env, client) { // once per person, after their 5th day of play, unless they already gave Stars
+  const u = await env.DB.prepare("SELECT chat_id FROM tg_users WHERE client = ? AND active = 1 AND asked = 0").bind(client).first(); if (!u) return;
+  const d = await env.DB.prepare("SELECT COUNT(DISTINCT date) AS n FROM plays WHERE client = ?").bind(client).first(); if (d.n < ASK_DAYS) return;
+  const given = await env.DB.prepare("SELECT 1 FROM donations WHERE chat_id = ? LIMIT 1").bind(u.chat_id).first();
+  const claim = await env.DB.prepare("UPDATE tg_users SET asked = 1 WHERE chat_id = ? AND asked = 0").bind(u.chat_id).run(); if (!claim.meta?.changes || given) return;
+  const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
+  await tg(env, "sendMessage", { chat_id: u.chat_id, text: `🙌 Sezgir'ni ${d.n} kun o'ynadingiz, rahmat!\n\nSezgir bepul va reklamasiz. Uni bir kishi yaratgan va har kuni yangilab boradi. O'yin yoqayotgan bo'lsa, bir necha ⭐ bilan qo'llab-quvvatlashingiz mumkin: yangi testlar va server shu hisobdan bo'ladi.\n\nQo'llab-quvvatlaganlarning ismi yonida guruh reytinglarida ⭐ turadi.`, reply_markup: { inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] }))] } });
+}
 async function supporters(env) {
   const top = await env.DB.prepare("SELECT chat_id, MAX(anon) AS anon, MAX(name) AS name, SUM(stars) AS stars, MAX(created) AS last FROM donations GROUP BY chat_id ORDER BY stars DESC, last ASC LIMIT 10").all();
   const agg = await env.DB.prepare("SELECT COUNT(DISTINCT chat_id) AS people, COALESCE(SUM(stars), 0) AS stars FROM donations").first();
@@ -359,7 +368,7 @@ export default {
         const scores = b.scores.map(Number); if (scores.some(s => !Number.isInteger(s) || s < 0 || s > 100)) return json({ error: "bad scores" }, 400, h);
         const total = Math.round(scores.reduce((a, s) => a + s, 0) / 5);
         const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, b.client, total, JSON.stringify(scores), Date.now()).run();
-        if (ins.meta?.changes) ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {}));
+        if (ins.meta?.changes) { ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, b.client).catch(() => {})); }
         return json(await stats(env, b.date, total), 200, h);
       }
       return json({ error: "not found" }, 404, h);

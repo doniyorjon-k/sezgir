@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS tg_users (
   client  TEXT,                      -- player id the reminders and streak are tied to
   name    TEXT,
   active  INTEGER NOT NULL DEFAULT 1,
-  created INTEGER NOT NULL
+  created INTEGER NOT NULL,
+  asked   INTEGER NOT NULL DEFAULT 0 -- 1 once the one-time support message was sent (older DBs: ALTER TABLE ... ADD COLUMN)
 );
 
 -- Telegram groups with a shared daily leaderboard
@@ -52,3 +53,4 @@ CREATE TABLE IF NOT EXISTS donations (
   created   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS donations_chat ON donations (chat_id);
+
