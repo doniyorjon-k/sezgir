@@ -139,9 +139,14 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .statbar b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .statbar b.hot { color: var(--accent); }
 .statbar small { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
-.live-link { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--surface); }
-.live-link:hover { color: var(--ink); border-color: var(--muted); }
-.live-link i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.pulse { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.pulse i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); flex: none; }
+.pulse b { color: var(--good); font-weight: 600; }
+.pulse span.go { color: var(--ink); }
+.pulse:hover span.go { text-decoration: underline; }
+header { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand pulse right"; align-items: center; column-gap: 18px; }
+header .brand { grid-area: brand; } header .pulse { grid-area: pulse; } header .head-right { grid-area: right; }
+@media (max-width: 560px) { header { grid-template-columns: 1fr auto; grid-template-areas: "brand right" "pulse pulse"; row-gap: 6px; } .pulse { font-size: 12px; } }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
@@ -202,7 +207,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 
 <div class="wrap">
   <header>
-    <div class="brand">Sez<span>gir</span></div>
+    <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" target="_blank" rel="noopener"></a>
     <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="statbar" class="statbar" hidden></div>
@@ -218,6 +223,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 <script>
 (() => {
 const GAME = "Sezgir";
+const API = ""; // stats server (Cloudflare Worker) base URL; empty = global stats off
 const LIVE_STATS = "https://datafa.st/share/6afe9c0384dcacca0a564198"; // public DataFast dashboard
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
@@ -243,6 +249,7 @@ const store = {
   get(k, def) { try { const v = localStorage.getItem("sezgir:" + k); return v ? JSON.parse(v) : def; } catch { return def; } },
   set(k, v) { try { localStorage.setItem("sezgir:" + k, JSON.stringify(v)); } catch {} }
 };
+async function api(path, body) { if (!API) return null; try { const r = await fetch(API + path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}); return r.ok ? await r.json() : null; } catch { return null; } }
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 1800); }
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -439,6 +446,12 @@ const MOON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke
 function paintThemeBtn() { const dark = document.documentElement.dataset.theme !== "light"; const b = $("#themeBtn"); b.innerHTML = dark ? SUN : MOON; b.setAttribute("aria-label", dark ? "Oq fonga o'tish" : "Qora fonga o'tish"); b.title = b.getAttribute("aria-label"); }
 $("#themeBtn").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sezgir:theme", next); } catch {} paintThemeBtn(); if (redraw && !stageBox.hidden) redraw(); });
 paintThemeBtn();
+// header pulse: "N onlayn · bugun M · statistika →" (numbers come from our stats server, which reads DataFast)
+function paintPulse(live) { const p = $("#pulse"); p.href = LIVE_STATS; p.replaceChildren(el("i"));
+  if (live && Number.isFinite(live.online)) { p.append(el("b", null, `${live.online} onlayn`), document.createTextNode(` · bugun ${live.today ?? 0} tashrif · `), el("span", "go", "statistika →")); }
+  else p.append(el("span", "go", "Jonli statistika →")); }
+async function refreshPulse() { paintPulse(await api("/live")); }
+paintPulse(null); if (API) { refreshPulse(); setInterval(refreshPulse, 60000); }
 function setMeta(no, ds) { $("#meta").textContent = `#${no} · ${prettyDate(ds)}`; }
 async function playDaily(date = today) {
   if (typeof date !== "string") date = today;
@@ -511,8 +524,7 @@ function home() {
   if (done) { renderResults(done); return; }
   const c = el("section", "home"); const d = new Date();
   const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); icons.append(x); });
-  const live = el("a", "live-link"); live.href = LIVE_STATS; live.target = "_blank"; live.rel = "noopener"; live.append(el("i"), document.createTextNode("Jonli statistika →"));
-  c.append(live, el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
+  c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); x.append(icon(t, 20), el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
