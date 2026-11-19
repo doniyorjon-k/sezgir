@@ -167,7 +167,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 /* share + challenge */
 .share-box { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .share-box .sb-head { font-weight: 500; }
-.tg-btn svg { color: #5ea9dd; }
+.tg-btn:not(.primary) svg { color: #5ea9dd; }
 .share-prev { width: 168px; aspect-ratio: 4 / 5; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); display: block; }
 .name-in { font: 400 14px var(--font-body); width: min(260px, 100%); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center; }
 .name-in::placeholder { color: var(--muted); }
@@ -767,11 +767,11 @@ function renderResults(rec) {
   const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
   const prev = el("img", "share-prev"); prev.alt = "Ulashiladigan natija kartasi"; drawCard(rec).then(cv2 => { prev.src = cv2.toDataURL("image/png"); }); sb.append(prev);
   if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; if (!store.get("name", "") && inTg()) { const u = window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user; if (u && u.first_name) store.set("name", u.first_name.replace(/[<>]/g, "").trim().slice(0, 24)); } ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
-  const img = btn("Rasm bilan ulashish", true, () => shareImage(rec, link())); img.classList.add("big");
-  const tg = el("a", "btn tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append(isToday ? "Do'stim bilan o'ynash" : "Do'stimga yuborish"); tg.target = "_blank"; tg.rel = "noopener";
+  const img = btn("Rasm bilan ulashish", false, () => shareImage(rec, link()));
+  const tg = el("a", "btn primary big tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append(isToday ? "Do'stim bilan o'ynash" : "Do'stimga yuborish"); tg.target = "_blank"; tg.rel = "noopener";
   const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(tgText(rec, isToday)); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
   tg.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); setTg(); T.openTelegramLink(tg.href); } });
-  const s1 = el("div", "row center-row"); s1.append(img); const s2 = el("div", "row center-row"); s2.append(tg); sb.append(s1, s2); c.append(sb);
+  const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img); sb.append(s1, s2); c.append(sb);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`));
     if (BOT) { const a = el("a", "remind"); a.href = `https://t.me/${BOT}?start=${clientId()}`; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>'; a.append("Har kuni Telegram'da eslatib turaylikmi?"); c.append(a); } }
