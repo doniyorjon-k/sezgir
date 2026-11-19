@@ -139,6 +139,9 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .statbar b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .statbar b.hot { color: var(--accent); }
 .statbar small { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+.live-link { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--surface); }
+.live-link:hover { color: var(--ink); border-color: var(--muted); }
+.live-link i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
 .home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
@@ -215,6 +218,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 <script>
 (() => {
 const GAME = "Sezgir";
+const LIVE_STATS = "https://datafa.st/share/6afe9c0384dcacca0a564198"; // public DataFast dashboard
 const LAUNCH = { y: 2026, m: 11, d: 12 }; // #1
 const W = 800, H = 500;
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
@@ -507,7 +511,8 @@ function home() {
   if (done) { renderResults(done); return; }
   const c = el("section", "home"); const d = new Date();
   const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); icons.append(x); });
-  c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
+  const live = el("a", "live-link"); live.href = LIVE_STATS; live.target = "_blank"; live.rel = "noopener"; live.append(el("i"), document.createTextNode("Jonli statistika →"));
+  c.append(live, el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); x.append(icon(t, 20), el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
