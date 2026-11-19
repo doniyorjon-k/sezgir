@@ -237,6 +237,25 @@ async function tgSetup(env, origin) {
   return { hook: hook.ok, cmds: cmds.ok, menu: menu.ok, desc: desc.ok && sdesc.ok, username: me.result?.username };
 }
 
+// Telegram Mini App initData check (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)
+async function hmac(key, msg) { const k = await crypto.subtle.importKey("raw", typeof key === "string" ? new TextEncoder().encode(key) : key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]); return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg))); }
+async function tgUser(env, initData) {
+  const q = new URLSearchParams(initData || ""), hash = q.get("hash"); if (!hash) return null; q.delete("hash");
+  const dcs = [...q.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join("\n");
+  const sig = [...await hmac(await hmac("WebAppData", env.TG_BOT_TOKEN), dcs)].map(b => b.toString(16).padStart(2, "0")).join("");
+  if (sig !== hash) return null;
+  if (Date.now() / 1000 - Number(q.get("auth_date") || 0) > 90 * 86400) return null; // stale session
+  try { const u = JSON.parse(q.get("user") || "null"); return u && Number.isInteger(u.id) ? u : null; } catch { return null; }
+}
+// The bot's menu button opens the site without ?cid=, so the Mini App asks which site client belongs to this Telegram user.
+async function whoami(env, initData, client) {
+  const u = await tgUser(env, initData); if (!u) return null;
+  const row = await env.DB.prepare("SELECT client FROM tg_users WHERE chat_id = ?").bind(u.id).first();
+  if (row) return row.client;
+  const name = [u.first_name, u.last_name].filter(Boolean).join(" ").slice(0, 60) || "Do'st";
+  await env.DB.prepare("INSERT OR IGNORE INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 0, ?)").bind(u.id, client, name, Date.now()).run();
+  return client;
+}
 export default {
   async fetch(req, env, ctx) {
     const h = cors(req, env), url = new URL(req.url);
@@ -252,6 +271,12 @@ export default {
       if (url.pathname === "/tg/setup" && req.method === "GET") {
         if (!env.TG_BOT_TOKEN || !env.TG_WEBHOOK_SECRET || url.searchParams.get("key") !== env.TG_WEBHOOK_SECRET) return json({ error: "forbidden" }, 403, h);
         return json(await tgSetup(env, url.origin), 200, h);
+      }
+      if (url.pathname === "/tg/whoami" && req.method === "POST") {
+        const b = await req.json().catch(() => null);
+        if (!env.TG_BOT_TOKEN || !b || typeof b.initData !== "string" || !CLIENT.test(b.client)) return json({ error: "bad body" }, 400, h);
+        const client = await whoami(env, b.initData, b.client);
+        return client ? json({ client }, 200, h) : json({ error: "forbidden" }, 403, h);
       }
       if (url.pathname === "/stats" && req.method === "GET") {
         const date = url.searchParams.get("date") || todayAround()[1];
