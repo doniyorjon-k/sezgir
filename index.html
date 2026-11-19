@@ -115,6 +115,29 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .verdict b { font-size: 44px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .verdict .chip { font-size: 14px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 999px; }
 .verdict .what { color: var(--muted); flex-basis: 100%; }
+.home { min-height: 72vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
+.wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
+.home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.home-tests { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.home-tests span { display: inline-flex; align-items: center; gap: 6px; }
+.home-tests i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+.home-lead { font-size: 17px; max-width: 42ch; text-wrap: balance; }
+.btn.play { min-width: 180px; justify-content: center; font-size: 16px; }
+.home-how { width: 100%; max-width: 520px; margin-top: 12px; }
+.intro-card { align-items: center; text-align: center; gap: 12px; padding-block: 40px; }
+.intro-card h2 { font-size: 26px; display: inline-flex; align-items: center; gap: 10px; }
+.intro-card h2 .dot { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.intro-card .about { max-width: 46ch; font-size: 16px; }
+.intro-card .rule { display: block; text-wrap: balance; }
+.intro-card .rule::before { display: inline-block; margin-right: 8px; vertical-align: middle; }
+.more { font-size: 14px; color: var(--muted); max-width: 52ch; text-align: left; }
+.more summary { cursor: pointer; text-align: center; list-style-position: inside; }
+.more .steps { margin-top: 10px; color: var(--ink); }
+.next-bar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 15px; }
+.next-label { color: var(--muted); }
+.next-sec { font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.next-track { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: -8px; }
+.next-track i { display: block; height: 100%; width: 0; background: var(--accent); }
 .howto { display: grid; gap: 0; }
 .howto > div { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
 .howto i { width: 8px; height: 8px; border-radius: 50%; margin-top: 8px; }
@@ -335,15 +358,21 @@ function showStage(on) { stageBox.hidden = !on; if (on) fit(); else redraw = nul
 
 function renderProgress(results, cur) { progress.replaceChildren(); TESTS.forEach((t, i) => { const r = results[i]; const s = el("div", "seg" + (r ? " done" : i === cur ? " cur" : "")); s.append(el("i")); const lab = el("span"); if (r) { lab.append(document.createTextNode(t.short + " ")); lab.append(el("b", null, String(r.score))); } else lab.textContent = `${i + 1}. ${t.short}`; s.append(lab); progress.append(s); }); }
 
-function intro(t, idx, total) { return new Promise(res => { showStage(true); hud.replaceChildren(); t.preview(); redraw = () => t.preview();
-  const c = el("section", "panel"); c.append(el("div", "step", total > 1 ? `${idx + 1}-test, jami ${total} ta` : "mashq · hisobga olinmaydi"), el("h2", null, t.name));
-  const ol = el("ol", "steps"); t.steps.forEach(s => ol.append(el("li", null, s))); c.append(ol, el("div", "rule", "Baholash: " + t.rule));
-  const b = btn("Boshlash", true, () => { audio(); res(); }); const row = el("div", "row"); row.append(b); c.append(row); show(c); b.focus(); }); }
+function intro(t, idx, total) { return new Promise(res => { showStage(false); hud.replaceChildren(); redraw = null;
+  const c = el("section", "card intro-card"); const h = el("h2"); const dot = el("i", "dot"); dot.style.background = `var(${t.color})`; h.append(dot, document.createTextNode(t.name));
+  c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h, el("p", "about", t.about), el("div", "rule", "Baholash: " + t.rule));
+  const more = el("details", "more"); more.append(el("summary", null, "Batafsil yo'riq")); const ol = el("ol", "steps"); t.steps.forEach(x => ol.append(el("li", null, x))); more.append(ol);
+  const b = btn("Tayyorman", true, () => { audio(); res(); }); b.classList.add("big"); const row = el("div", "row center-row"); row.append(b); c.append(row, more); show(c); b.focus(); }); }
 
+const NEXT_SECONDS = 3;
 function verdict(t, r, s, nextLabel) { return new Promise(res => { const c = el("section", "panel"); const v = el("div", "verdict"); v.append(el("b", null, String(s)), el("span", "chip", title(s)), el("div", "what", r.human)); c.append(el("div", "step", t.name + " natijasi"), v);
-  const b = btn(nextLabel, true, res); const row = el("div", "row"); row.append(b); c.append(row); show(c); b.focus(); }); }
+  const bar = el("div", "next-bar"); const label = el("span", "next-label"); const sec = el("b", "next-sec"); const track = el("div", "next-track"); const fill = el("i"); track.append(fill); bar.append(label, sec);
+  const skip = btn("Hozir o'tish", false, () => go()); const row = el("div", "row"); row.append(skip); c.append(bar, track, row); show(c);
+  let done = false; const t0 = performance.now(); const total = NEXT_SECONDS * 1000;
+  const go = () => { if (done) return; done = true; res(); };
+  const tick = () => { if (done) return; const left = total - (performance.now() - t0); if (left <= 0) return go(); label.textContent = `${nextLabel} boshlanadi`; sec.textContent = `${Math.ceil(left / 1000)} s`; fill.style.width = `${(1 - left / total) * 100}%`; requestAnimationFrame(tick); }; tick(); }); }
 
-async function runTest(t, params) { redraw = null; hud.replaceChildren(); const r = await t.run(params); hud.replaceChildren(); const s = scoreOf(r.err, t.sigma); t.reveal(params, r); redraw = () => t.reveal(params, r); return { r, s }; }
+async function runTest(t, params) { show(); showStage(true); redraw = null; hud.replaceChildren(); clear(); const r = await t.run(params); hud.replaceChildren(); const s = scoreOf(r.err, t.sigma); t.reveal(params, r); redraw = () => t.reveal(params, r); return { r, s }; }
 
 function dateOfNo(n) { return ymd(new Date(LAUNCH.y, LAUNCH.m - 1, LAUNCH.d + n - 1)); }
 function prettyDate(ds) { const [y, m, d] = ds.split("-").map(Number); return `${d}-${MONTHS[m - 1]}`; }
@@ -353,7 +382,7 @@ async function playDaily(date = today) {
   const no = puzzleNo(date); setMeta(no, date);
   const R = rng("sezgir-" + date); const params = TESTS.map(t => t.gen(R)); const results = [];
   progress.hidden = false;
-  for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length); const { r, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s, human: r.human }); renderProgress(results, i + 1); await verdict(t, r, s, i < TESTS.length - 1 ? `Keyingi: ${TESTS[i + 1].name}` : "Umumiy natija"); }
+  for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length); const { r, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s, human: r.human }); renderProgress(results, i + 1); await verdict(t, r, s, i < TESTS.length - 1 ? `Keyingi test: ${TESTS[i + 1].name}` : "Umumiy natija"); }
   const total = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
   const rec = { date, no, total, results, late: date !== today };
   const hist = store.get("history", {}); hist[date] = rec; store.set("history", hist);
@@ -416,11 +445,12 @@ async function practice(t) { progress.hidden = true; await intro(t, 0, 1); const
 function home() {
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
   if (done) { renderResults(done); return; }
-  const c = el("section", "card");
-  c.append(el("div", "step", `Kunlik jumboq #${todayNo}`), el("h1", null, "Ko'zingiz qanchalik aniq?"), el("p", "lead", "Har kuni 5 ta qisqa test: sanash, kuzatish, rang, ritm va ulush. Har biri 0 dan 100 gacha baholanadi, jami taxminan 2 daqiqa. Bugun hamma bir xil topshiriqlarni oladi."));
-  const row = el("div", "row"); const b = btn("O'yinni boshlash", true, () => playDaily(today)); row.append(b, btn("Arxiv: o'tgan kunlar", false, archive)); c.append(row);
-  const how = el("div", "howto"); TESTS.forEach((t, i) => { const d = el("div"); const dot = el("i"); dot.style.background = `var(${t.color})`; d.append(dot, el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(d); });
-  c.append(el("h2", null, "Qanday o'ynaladi"), how, el("p", "lead", "Avval mashq qilib ko'rishingiz mumkin (natija hisobga olinmaydi):"), practiceRow());
+  const c = el("section", "home"); const d = new Date();
+  const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("span"); const dot = el("i"); dot.style.background = `var(${t.color})`; x.append(dot, document.createTextNode(t.short)); icons.append(x); });
+  c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
+  const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
+  const r2 = el("div", "row center-row"); r2.append(btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
+  const more = el("details", "more home-how"); more.append(el("summary", null, "Qanday o'ynaladi?")); const how = el("div", "howto"); TESTS.forEach((t, i) => { const x = el("div"); const dot = el("i"); dot.style.background = `var(${t.color})`; x.append(dot, el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about)); how.append(x); }); more.append(how); c.append(more);
   show(c); b.focus();
 }
 home();
