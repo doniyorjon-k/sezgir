@@ -141,6 +141,21 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .global { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
 .global .ghead { font-weight: 500; }
 .global .muted { color: var(--muted); font-size: 13px; }
+/* share + challenge */
+.share-box { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.share-box .sb-head { font-weight: 500; }
+.share-prev { width: 168px; aspect-ratio: 4 / 5; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); display: block; }
+.name-in { font: 400 14px var(--font-body); width: min(260px, 100%); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center; }
+.name-in::placeholder { color: var(--muted); }
+.vs-banner { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 14px 18px; max-width: 420px; display: flex; flex-direction: column; gap: 4px; }
+.vs-banner b { color: var(--accent); }
+.vs-banner small { color: var(--muted); font-size: 13px; }
+.vs { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.vs .vs-head { text-align: center; font-weight: 500; }
+.vs-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px 48px; gap: 10px; font-size: 14px; padding: 4px 2px; }
+.vs-row span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.vs-row.hd { color: var(--muted); font-size: 12px; }
+.vs-row .win { color: var(--good); font-weight: 600; }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; height: 90px; align-items: end; max-width: 420px; width: 100%; margin: 0 auto; }
 .hcol { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
 .hcol i { width: 100%; background: var(--line); border-radius: 4px 4px 0 0; display: block; }
@@ -606,6 +621,53 @@ const RETIRED = { atlas: { id: "atlas", name: "Atlas rangi", short: "Rang", colo
 function testsOf(rec) { return rec.results.map(r => TESTS.find(t => t.id === r.id) || RETIRED[r.id] || { id: r.id, name: r.id, short: r.id, color: "--muted" }); }
 function shareText(rec) { const ts = testsOf(rec), sc = rec.results.map(r => r.score); return `${GAME} #${rec.no}: ${grade(rec.total)} · ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${ts.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
 
+const SITE = "https://sezgir.github.io/";
+// ---------- challenge link: ?vs=<no>.<s1>.<s2>.<s3>.<s4>.<s5>&n=<name> ----------
+function challengeUrl(rec) { const u = new URL(SITE); u.searchParams.set("vs", [rec.no, ...rec.results.map(r => r.score)].join(".")); const n = store.get("name", ""); if (n) u.searchParams.set("n", n); return u.toString(); }
+function readChallenge() { try { const q = new URLSearchParams(location.search), v = q.get("vs"); if (!v) return; const a = v.split(".").map(Number);
+  if (a.length === 6 && a.every(x => Number.isInteger(x) && x >= 0) && a.slice(1).every(x => x <= 100) && a[0] === todayNo) { const name = (q.get("n") || "").replace(/[<>]/g, "").trim().slice(0, 24) || "Do'stingiz"; store.set("vs", { no: a[0], scores: a.slice(1), name }); }
+  history.replaceState(null, "", location.pathname); } catch {} }
+function activeVs() { const v = store.get("vs", null); return v && v.no === todayNo ? v : null; }
+function vsTotal(v) { return Math.round(v.scores.reduce((a, b) => a + b, 0) / v.scores.length); }
+function vsBlock(rec, v) { const box = el("div", "vs"); const vt = vsTotal(v), me = rec.total;
+  box.append(el("p", "vs-head", me > vt ? `Siz ${v.name}dan o'zdingiz: ${me} va ${vt}` : me < vt ? `${v.name} bu safar oldinda: ${vt} va ${me}` : `Durang: ikkovingiz ham ${me} ball`));
+  const hd = el("div", "vs-row hd"); hd.append(el("span", null, "test"), el("span", null, "siz"), el("span", null, v.name.slice(0, 8))); box.append(hd);
+  testsOf(rec).forEach((t, i) => { const a = rec.results[i].score, b = v.scores[i] ?? 0; const row = el("div", "vs-row"); row.append(el("span", null, t.name), el("span", a > b ? "win" : null, String(a)), el("span", b > a ? "win" : null, String(b))); box.append(row); });
+  return box; }
+
+// ---------- result card image (1080x1350, always dark) ----------
+const CARD = { bg: "#14171d", surface: "#1b1f27", ink: "#e6e8ec", muted: "#9aa1ae", line: "#2a303b", accent: "#7fb0b6", "--anor": "#d07b8b", "--gold": "#d2ae74", "--good": "#82b590", "--accent": "#7fb0b6", "--muted": "#9aa1ae" };
+function svgImg(id, color) { return new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null);
+  im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="${color}">${(ICONS[id] || "").replace(/currentColor/g, color)}</svg>`); }); }
+async function drawCard(rec) {
+  try { await Promise.all([document.fonts.load("600 64px Inter"), document.fonts.load("500 40px Inter"), document.fonts.load("400 32px Inter")]); } catch {}
+  const Wc = 1080, Hc = 1350, c = document.createElement("canvas"); c.width = Wc; c.height = Hc; const x = c.getContext("2d"); const F = (w, px) => `${w} ${px}px Inter, system-ui, sans-serif`;
+  x.fillStyle = CARD.bg; x.fillRect(0, 0, Wc, Hc);
+  x.textBaseline = "alphabetic"; x.textAlign = "left";
+  x.fillStyle = CARD.ink; x.font = F(600, 52); x.fillText(GAME, 90, 140);
+  x.fillStyle = CARD.muted; x.font = F(400, 32); x.textAlign = "right"; x.fillText(`#${rec.no} · ${prettyDate(rec.date)}`, Wc - 90, 138);
+  x.textAlign = "center"; x.fillStyle = CARD.accent; x.font = F(600, 250); x.fillText(grade(rec.total), Wc / 2, 470);
+  x.fillStyle = CARD.ink; x.font = F(500, 46); x.fillText(`${rec.total} ball · ${title(rec.total)}`, Wc / 2, 560);
+  const ts = testsOf(rec); const top = 650, step = 112;
+  const imgs = await Promise.all(ts.map(t => svgImg(t.id, CARD[t.color] || CARD.muted)));
+  ts.forEach((t, i) => { const y = top + i * step, s = rec.results[i].score;
+    x.fillStyle = CARD.surface; roundRect(x, 90, y, Wc - 180, 92, 20); x.fill();
+    if (imgs[i]) x.drawImage(imgs[i], 118, y + 22, 48, 48);
+    x.textAlign = "left"; x.fillStyle = CARD.ink; x.font = F(500, 32); x.fillText(t.name, 190, y + 58);
+    const bx = 520, bw = 300; x.fillStyle = CARD.line; roundRect(x, bx, y + 40, bw, 12, 6); x.fill();
+    x.fillStyle = CARD[t.color] || CARD.accent; roundRect(x, bx, y + 40, Math.max(12, bw * s / 100), 12, 6); x.fill();
+    x.textAlign = "right"; x.fillStyle = CARD.ink; x.font = F(600, 34); x.fillText(String(s), Wc - 120, y + 59); });
+  x.textAlign = "center"; x.fillStyle = CARD.muted; x.font = F(400, 32); x.fillText("Siz ham sinab ko'ring", Wc / 2, 1255);
+  x.fillStyle = CARD.accent; x.font = F(500, 36); x.fillText("sezgir.github.io", Wc / 2, 1302);
+  return c; }
+function roundRect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
+async function shareImage(rec, link) {
+  const c = await drawCard(rec); const blob = await new Promise(r => c.toBlob(r, "image/png")); if (!blob) { toast("Rasm yasab bo'lmadi"); return; }
+  const file = new File([blob], `sezgir-${rec.no}.png`, { type: "image/png" }); const text = `${shareText(rec)}\n${link}`;
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("Rasm yuklab olindi, endi Telegram yoki story'ga joylang"); }
+
 function radar(scores, labels) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
   const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = attrs[k]; if (typeof v === "string" && v.startsWith("var(")) e.style.setProperty(k, v); else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
@@ -633,10 +695,17 @@ function renderResults(rec) {
   if (API && rec.date === today) { const g = el("div", "global"); g.append(el("p", "muted", "Boshqa o'yinchilar bilan solishtirilmoqda...")); c.append(g); globalBlock(g, rec); }
   const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
   const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
-  const txt = shareText(rec);
-  const share = btn("Natijani ulashish", true, () => { const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } }); share.classList.add("big");
-  const tg = el("a", "btn", "Telegram'da ulashish"); tg.href = "https://t.me/share/url?url=" + encodeURIComponent(location.href.split("#")[0]) + "&text=" + encodeURIComponent(txt); tg.target = "_blank"; tg.rel = "noopener";
-  const r1 = el("div", "row center-row"); r1.append(share); const r2 = el("div", "row center-row"); r2.append(tg); if (rec.date === today) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (rec.date !== today) c.prepend(backLink("Arxiv", archive)); c.append(r1, r2);
+  const v = rec.date === today ? activeVs() : null; if (v) c.append(vsBlock(rec, v));
+  const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : SITE;
+  const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
+  const prev = el("img", "share-prev"); prev.alt = "Ulashiladigan natija kartasi"; drawCard(rec).then(cv2 => { prev.src = cv2.toDataURL("image/png"); }); sb.append(prev);
+  if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
+  const img = btn("Rasm bilan ulashish", true, () => shareImage(rec, link())); img.classList.add("big");
+  const tg = el("a", "btn", "Telegram'da yuborish"); tg.target = "_blank"; tg.rel = "noopener";
+  const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(shareText(rec) + (isToday ? "\nMendan o'ta olasizmi?" : "")); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
+  const cp = btn("Matnni nusxalash", false, () => { const txt = `${shareText(rec)}\n${link()}`; const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } });
+  const s1 = el("div", "row center-row"); s1.append(img); const s2 = el("div", "row center-row"); s2.append(tg, cp); sb.append(s1, s2); c.append(sb);
+  const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`)); }
   else c.append(el("p", "next", `Arxivdagi #${rec.no} (${prettyDate(rec.date)}). Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
   show(c); window.scrollTo(0, 0);
@@ -681,10 +750,12 @@ function home() {
   const c = el("section", "home"); const d = new Date();
   const icons = el("div", "home-tests"); TESTS.forEach(t => { const x = el("div", "home-test"); const box = el("div", "tile"); box.append(icon(t, 30)); x.append(box, el("span", null, t.short)); x.title = t.name; x.addEventListener("click", () => howTo(t.id)); icons.append(x); });
   c.append(el("div", "wordmark", GAME), el("div", "home-date", `#${todayNo} · ${WEEKDAYS[d.getDay()]}, ${d.getDate()}-${MONTHS[d.getMonth()]}`), icons, el("p", "home-lead", "Beshta qisqa idrok testi. Ikki daqiqa. Bitta ball."));
+  const v = activeVs(); if (v) { const vb = el("div", "vs-banner"); const p = el("p"); p.append(`${v.name} bugun `, el("b", null, `${grade(vsTotal(v))} · ${vsTotal(v)} ball`), " oldi."); vb.append(p, el("small", null, "Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.")); c.append(vb); }
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Qanday o'ynaladi?", false, () => howTo()), btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
   show(c); b.focus();
 }
+readChallenge();
 home();
 })();
 </script>
