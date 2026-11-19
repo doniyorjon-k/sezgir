@@ -5,7 +5,7 @@ compatibility_date = "2026-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "sezgir"
-database_id = "FILL_AFTER_CREATE"
+database_id = "c8b83d4c-775d-400b-b9bd-43d5f811ad87"
 
 [vars]
 ALLOWED_ORIGINS = "https://doniyorjon-k.github.io"
