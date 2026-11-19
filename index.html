@@ -326,6 +326,13 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .remind { align-self: center; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 14px; font-weight: 500; text-decoration: none; padding: 8px 14px; border-radius: 999px; background: var(--accent-soft); }
 .remind:hover { text-decoration: underline; }
 /* support */
+.tea { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; font: 500 13px var(--font-body); color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); background: color-mix(in srgb, var(--gold) 9%, var(--surface)); transition: border-color .15s, background .15s; }
+.tea:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 15%, var(--surface)); }
+.tea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tea .s { display: none; }
+@media (max-width: 560px) { .tea .l { display: none; } .tea .s { display: inline; } }
+@media (max-width: 400px) { .head-right .meta { display: none; } }
 .sup-card { width: 100%; max-width: 420px; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
   border: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); transition: border-color .15s, background .15s; }
 .sup-card:hover { border-color: var(--gold); }
@@ -363,7 +370,7 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 <div class="wrap">
   <header>
     <div class="brand">Sez<span>gir</span></div><a class="pulse" id="pulse" href="#statistika"></a>
-    <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
+    <div class="head-right"><button class="tea" id="teaBtn" type="button" hidden title="Muallifga bir choy olib bering"></button><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
   <div id="statbar" class="statbar" hidden></div>
   <div id="progress" hidden></div>
@@ -851,13 +858,13 @@ function howTo(focusId) {
 }
 // ---------- Support: Telegram Stars (via the bot's invoice) and a card number ----------
 const DONATE_CARD = { no: "5614 6887 0540 3722", owner: "D.Q." };
-const HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>';
-function supportCard(back) { const b = el("button", "sup-card"); b.type = "button"; const ic = el("span", "sup-ico"); ic.innerHTML = HEART; const mid = el("span"); mid.append(el("b", null, "Sezgir'ni qo'llab-quvvatlang"), el("small", null, "Bepul va reklamasiz o'yin. Telegram Stars yoki karta orqali.")); const ch = el("span", "chev"); ch.innerHTML = ARROW_R; b.append(ic, mid, ch); b.addEventListener("click", () => supportPage(back)); return b; }
+const CUP = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5v-4Z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8.5 3.5c-.6.8-.6 1.7 0 2.5M12 3.5c-.6.8-.6 1.7 0 2.5"/></svg>';
+function supportCard(back) { const b = el("button", "sup-card"); b.type = "button"; const ic = el("span", "sup-ico"); ic.innerHTML = CUP; const mid = el("span"); mid.append(el("b", null, "Yoqdimi? Muallifga bir choy olib bering"), el("small", null, "Sezgir bepul va reklamasiz. Telegram Stars yoki karta orqali.")); const ch = el("span", "chev"); ch.innerHTML = ARROW_R; b.append(ic, mid, ch); b.addEventListener("click", () => supportPage(back)); return b; }
 async function supportPage(back = home) {
   showStage(false); progress.hidden = true; setMeta(todayNo, today);
   const c = el("section", "card sup-page"); const tally = el("p", "sup-tally"); tally.hidden = true;
-  c.append(backLink(back === home ? "Bosh sahifa" : "Natija", back), el("div", "step", "Qo'llab-quvvatlash"), el("h2", null, "Sezgir'ga yordam bering"),
-    el("p", "lead", "Sezgir bepul va reklamasiz. Server, yangi testlar va har kungi jumboqlar sizning yordamingiz bilan davom etadi. Har qanday miqdor uchun rahmat!"), tally);
+  c.append(backLink(back === home ? "Bosh sahifa" : "Natija", back), el("div", "step", "Qo'llab-quvvatlash"), el("h2", null, "Muallifga bir choy olib bering"),
+    el("p", "lead", "Sezgir bepul va reklamasiz. Bir choylik yordamingiz server, yangi testlar va har kungi jumboqlarga ketadi. Har qanday miqdor uchun rahmat!"), tally);
   // Stars
   let n = 10; const opts = el("div", "stars"), inp = el("input", "star-in"); inp.type = "number"; inp.min = 1; inp.max = 10000; inp.inputMode = "numeric"; inp.placeholder = "Miqdor"; inp.hidden = true; inp.setAttribute("aria-label", "Stars miqdori");
   const go = btn("", true, () => pay()); go.classList.remove("primary"); go.classList.add("gold", "big");
@@ -885,6 +892,8 @@ async function supportPage(back = home) {
   c.append(el("h4", null, "Telegram Stars"), opts, anon, go, note, el("h4", null, "Karta orqali"), card, el("p", "sup-note", "Karta orqali yuborilganlar reytingga avtomatik tushmaydi."), el("h4", null, "Qo'llab-quvvatlovchilar"), list, contact);
   show(c); window.scrollTo(0, 0); loadTop();
 }
+(function teaBtn() { const b = $("#teaBtn"); if (!b || !API || !BOT) return; b.innerHTML = CUP + '<span class="l">Choy olib bering</span><span class="s">Bir choy</span>'; b.hidden = false;
+  b.addEventListener("click", () => { if (!inGame()) supportPage(home); }); })();
 function home() {
   clearInterval(spTimer);
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const done = store.get("history", {})[today];
@@ -895,7 +904,6 @@ function home() {
   const v = activeVs(); if (v) { const vb = el("div", "vs-banner"); const p = el("p"); p.append(`${v.name} bugun `, el("b", null, `${grade(vsTotal(v))} · ${vsTotal(v)} ball`), " oldi."); vb.append(p, el("small", null, "Undan o'ta olasizmi? O'ynab bo'lgach natijalaringiz yonma-yon chiqadi.")); c.append(vb); }
   const b = btn("O'ynash", true, () => playDaily(today)); b.classList.add("big", "play"); const r1 = el("div", "row center-row"); r1.append(b);
   const r2 = el("div", "row center-row"); r2.append(btn("Qanday o'ynaladi?", false, () => howTo()), btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); c.append(r1, r2);
-  if (API && BOT) c.append(supportCard(home));
   show(c); b.focus();
 }
 // ---------- Telegram Mini App: full screen, no swipe-to-close while dragging on the stage ----------
