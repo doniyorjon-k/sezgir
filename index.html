@@ -649,7 +649,11 @@ function shareText(rec) { return tgText(rec, rec.date === today); }
 
 const SITE = "https://sezgir.github.io/";
 // ---------- challenge link: ?vs=<no>.<s1>.<s2>.<s3>.<s4>.<s5>&n=<name> ----------
-function challengeUrl(rec) { const u = new URL(SITE); u.searchParams.set("vs", [rec.no, ...rec.results.map(r => r.score)].join(".")); const n = store.get("name", ""); if (n) u.searchParams.set("n", n); return u.toString(); }
+const inTg = () => document.documentElement.classList.contains("tg") && window.Telegram && window.Telegram.WebApp;
+function b64url(str) { return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+// inside Telegram the link goes to the bot (t.me/<bot>?start=v<no>_<scores>_<name>), which opens the game as a Mini App
+function botLink(rec) { if (!rec) return `https://t.me/${BOT}`; const n = store.get("name", ""); let p = `v${[rec.no, ...rec.results.map(r => r.score)].join("_")}`; if (n) { const room = 63 - p.length; for (let k = Math.min(n.length, 16); k > 0; k--) { const b = b64url(n.slice(0, k)); if (b.length <= room) { p += "_" + b; break; } } } return `https://t.me/${BOT}?start=${p}`; }
+function challengeUrl(rec) { if (inTg() && BOT) return botLink(rec); const u = new URL(SITE); u.searchParams.set("vs", [rec.no, ...rec.results.map(r => r.score)].join(".")); const n = store.get("name", ""); if (n) u.searchParams.set("n", n); return u.toString(); }
 function readChallenge() { try { const q = new URLSearchParams(location.search), v = q.get("vs"), cid = q.get("cid");
   if (cid && /^[a-z0-9]{16,40}$/.test(cid)) store.set("client", cid); // opened from the Telegram bot: same player id as the bot's reminders
   if (!v) { if (cid) history.replaceState(null, "", location.pathname); return; } const a = v.split(".").map(Number);
@@ -728,13 +732,14 @@ function renderResults(rec) {
   const ts = testsOf(rec); c.append(radar(rec.results.map(r => r.score), ts.map(t => t.short)));
   const rows = el("div", "rows"); ts.forEach((t, i) => { const r = rec.results[i]; const row = el("div", "rrow"); const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(icon(t, 22), mid, el("div", "pts", String(r.score)), el("div", "tier", grade(r.score))); rows.append(row); }); c.append(rows);
   const v = rec.date === today ? activeVs() : null; if (v) c.append(vsBlock(rec, v));
-  const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : SITE;
+  const isToday = rec.date === today, link = () => isToday ? challengeUrl(rec) : (inTg() && BOT ? botLink(null) : SITE);
   const sb = el("div", "share-box"); sb.append(el("p", "sb-head", isToday ? "Do'stlaringizni chaqiring" : "Natijani ulashish"));
   const prev = el("img", "share-prev"); prev.alt = "Ulashiladigan natija kartasi"; drawCard(rec).then(cv2 => { prev.src = cv2.toDataURL("image/png"); }); sb.append(prev);
-  if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
+  if (isToday) { const ni = el("input", "name-in"); ni.type = "text"; ni.maxLength = 24; ni.placeholder = "Ismingiz (havolada ko'rinadi)"; if (!store.get("name", "") && inTg()) { const u = window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user; if (u && u.first_name) store.set("name", u.first_name.replace(/[<>]/g, "").trim().slice(0, 24)); } ni.value = store.get("name", ""); ni.setAttribute("aria-label", "Ismingiz"); ni.addEventListener("input", () => store.set("name", ni.value.replace(/[<>]/g, "").trim().slice(0, 24))); sb.append(ni); }
   const img = btn("Rasm bilan ulashish", true, () => shareImage(rec, link())); img.classList.add("big");
   const tg = el("a", "btn tg-btn"); tg.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.5L19 7l-8 8 6.5 5L21 4Z"/></svg>'; tg.append("Telegram'da yuborish"); tg.target = "_blank"; tg.rel = "noopener";
   const setTg = () => { tg.href = "https://t.me/share/url?url=" + encodeURIComponent(link()) + "&text=" + encodeURIComponent(tgText(rec, isToday)); }; setTg(); tg.addEventListener("pointerdown", setTg); tg.addEventListener("focus", setTg);
+  tg.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); setTg(); T.openTelegramLink(tg.href); } });
   const cp = btn("Matnni nusxalash", false, () => { const txt = `${shareText(rec)}\n${link()}`; const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } });
   const s1 = el("div", "row center-row"); s1.append(img); const s2 = el("div", "row center-row"); s2.append(tg, cp); sb.append(s1, s2); c.append(sb);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
