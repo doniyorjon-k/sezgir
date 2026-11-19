@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS plays (
   PRIMARY KEY (date, client)
 );
 CREATE INDEX IF NOT EXISTS plays_date_total ON plays (date, total);
+CREATE INDEX IF NOT EXISTS plays_client ON plays (client, date);
 
 -- one row per visitor per day; `last` is refreshed by a ping every couple of minutes while the page is open
 CREATE TABLE IF NOT EXISTS visits (
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS visits (
   PRIMARY KEY (date, client)
 );
 CREATE INDEX IF NOT EXISTS visits_last ON visits (last);
+CREATE INDEX IF NOT EXISTS visits_client ON visits (client);
 
 -- Telegram bot subscribers (daily reminders)
 CREATE TABLE IF NOT EXISTS tg_users (
@@ -54,3 +56,16 @@ CREATE TABLE IF NOT EXISTS donations (
 );
 CREATE INDEX IF NOT EXISTS donations_chat ON donations (chat_id);
 
+
+-- running counters so hot paths never scan whole tables:
+-- players / visitors (all time), v:<date> visitors that day, p:<date> plays that day, s:<date> sum of totals that day
+CREATE TABLE IF NOT EXISTS meta (
+  k TEXT PRIMARY KEY,
+  v INTEGER NOT NULL DEFAULT 0
+);
+-- short-lived cached JSON (stats of a day, live, summary), refreshed every 30-120 s
+CREATE TABLE IF NOT EXISTS snap (
+  k    TEXT PRIMARY KEY,
+  at   INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
