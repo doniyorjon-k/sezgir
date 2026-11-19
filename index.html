@@ -130,7 +130,14 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .verdict b { font-size: 44px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .verdict .chip { font-size: 14px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 999px; }
 .verdict .what { color: var(--muted); flex-basis: 100%; }
-.home { min-height: 72vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
+.statbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.statbar[hidden] { display: none; }
+.statbar > div { padding: 10px 8px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.statbar > div + div { border-left: 1px solid var(--line); }
+.statbar b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.statbar b.hot { color: var(--accent); }
+.statbar small { font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+.home { min-height: 64vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding-block: 24px; }
 .wordmark { font-size: clamp(44px, 12vw, 72px); font-weight: 600; letter-spacing: .06em; line-height: 1; }
 .home-date { color: var(--muted); font-size: 14px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
 .home-tests { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; font-size: 12px; color: var(--muted); }
@@ -193,6 +200,7 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
     <div class="brand">Sez<span>gir</span></div>
     <div class="head-right"><div class="meta" id="meta"></div><button class="theme-btn" id="themeBtn" type="button"></button></div>
   </header>
+  <div id="statbar" class="statbar" hidden></div>
   <div id="progress" hidden></div>
   <div id="stageBox" hidden>
     <canvas id="cv"></canvas>
@@ -393,8 +401,12 @@ const TESTS = [
 const today = ymd(), todayNo = puzzleNo(today);
 const now = new Date();
 $("#meta").textContent = `#${todayNo} · ${now.getDate()}-${MONTHS[now.getMonth()]}`;
-function show(...nodes) { screen.replaceChildren(...nodes); }
-function showStage(on) { stageBox.hidden = !on; if (on) fit(); else redraw = null; }
+function show(...nodes) { screen.replaceChildren(...nodes); paintStatBar(); }
+function paintStatBar() { const bar = $("#statbar"); if (!bar) return; if (!progress.hidden || !stageBox.hidden) { bar.hidden = true; return; }
+  const st = statsOf(); const todayRec = store.get("history", {})[today];
+  const items = [["O'yinlar", st.played], ["Ketma-ket", st.streak, st.streak > 0], ["Eng yaxshi", st.best ? `${grade(st.best)} · ${st.best}` : "–"], ["Bugun", todayRec ? `${grade(todayRec.total)} · ${todayRec.total}` : "–", !!todayRec]];
+  bar.replaceChildren(...items.map(([k, v, hot]) => { const d = el("div"); const b = el("b", hot ? "hot" : null, String(v)); d.append(b, el("small", null, k)); return d; })); bar.hidden = false; }
+function showStage(on) { stageBox.hidden = !on; if (on) { fit(); $("#statbar").hidden = true; } else redraw = null; }
 
 function renderProgress(results, cur) { progress.replaceChildren(); TESTS.forEach((t, i) => { const r = results[i]; const s = el("div", "seg" + (r ? " done" : i === cur ? " cur" : "")); s.append(el("i")); const lab = el("span"); if (r) { lab.append(document.createTextNode(t.short + " ")); lab.append(el("b", null, String(r.score))); } else lab.textContent = `${i + 1}. ${t.short}`; s.append(lab); progress.append(s); }); }
 
@@ -467,7 +479,6 @@ function renderResults(rec) {
   const r1 = el("div", "row center-row"); r1.append(share); const r2 = el("div", "row center-row"); r2.append(tg); if (rec.date === today) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (rec.date !== today) c.prepend(backLink("Arxiv", archive)); c.append(r1, r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`)); }
   else c.append(el("p", "next", `Arxivdagi #${rec.no} (${prettyDate(rec.date)}). Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
-  const st = statsOf(); const sg = el("div", "stats"); [["O'yinlar", st.played], ["Ketma-ket kun", st.streak], ["Eng yaxshi", st.best], ["O'rtacha", st.avg]].forEach(([k, v]) => { const d = el("div"); d.append(el("b", null, String(v)), el("small", null, k)); sg.append(d); }); c.append(sg);
   show(c); window.scrollTo(0, 0);
 }
 function practiceMenu() { showStage(false); progress.hidden = true; setMeta(todayNo, today); const c = el("section", "card"); c.append(backLink("Bosh sahifa", home), el("div", "step", "Mashq"), el("h2", null, "Qaysi testni mashq qilasiz?"), el("p", "lead", "Mashq natijalari hisobga olinmaydi, xohlagancha takrorlash mumkin."), practiceRow()); show(c); window.scrollTo(0, 0); }
