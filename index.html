@@ -127,8 +127,24 @@ pre.share { margin: 0; white-space: pre-wrap; background: var(--bg); border-radi
 .arch-no { color: var(--muted); font-variant-numeric: tabular-nums; }
 .arch-score { font-weight: 500; color: var(--accent); font-variant-numeric: tabular-nums; }
 .arch-row.played .arch-score { color: var(--ink); }
-.radar { width: 100%; max-width: 300px; margin: 0 auto; display: block; }
-.radar text { font: 500 11px var(--font-body); fill: var(--muted); }
+.result-card { gap: 24px; }
+.hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.hero .num { display: flex; align-items: baseline; gap: 14px; justify-content: center; }
+.hero .num b { font-size: 80px; font-weight: 600; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.hero .num span { font-size: 18px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 5px 14px; border-radius: 999px; }
+.hero p { color: var(--muted); font-size: 14px; }
+.rows { display: flex; flex-direction: column; gap: 8px; }
+.rrow { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.rrow > i { width: 8px; height: 8px; border-radius: 50%; }
+.rrow .nm { font-weight: 500; }
+.rrow .det { color: var(--muted); font-size: 13px; }
+.rrow .pts { font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; text-align: right; }
+.rrow .tier { font-size: 12px; color: var(--muted); width: 44px; text-align: right; }
+.center-row { justify-content: center; }
+.btn.big { padding: 14px 32px; font-size: 15px; }
+.next { text-align: center; color: var(--muted); font-size: 14px; }
+.radar { width: 100%; max-width: 360px; margin: 0 auto; display: block; }
+.radar text { font: 500 12px var(--font-body); fill: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -351,31 +367,34 @@ function statsOf() {
 }
 function shareText(rec) { const sc = TESTS.map(t => rec.results.find(r => r.id === t.id).score); return `${GAME} #${rec.no}: ${rec.total} ball, «${title(rec.total)}»\n${sc.map(square).join("")}\n${TESTS.map((t, i) => `${t.short} ${sc[i]}`).join(" · ")}`; }
 
-function radar(scores) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 140, R = 92; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
-  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 300 290"); svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
+function radar(scores) { const NS = "http://www.w3.org/2000/svg", cx = 150, cy = 145, R = 86; const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "-50 0 400 290"); svg.style.overflow = "visible"; svg.setAttribute("class", "radar"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Testlar bo'yicha ballar diagrammasi");
   const add = (tag, attrs, txt) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; svg.append(e); return e; };
   [.25, .5, .75, 1].forEach(k => add("polygon", { points: [0, 1, 2, 3, 4].map(i => pt(i, R * k).join(",")).join(" "), fill: "none", stroke: css("--line"), "stroke-width": 1 }));
   [0, 1, 2, 3, 4].forEach(i => { const [x, y] = pt(i, R); add("line", { x1: cx, y1: cy, x2: x, y2: y, stroke: css("--line"), "stroke-width": 1 }); });
   add("polygon", { points: scores.map((s, i) => pt(i, R * Math.max(s, 3) / 100).join(",")).join(" "), fill: css("--accent"), "fill-opacity": .18, stroke: css("--accent"), "stroke-width": 2 });
-  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: css("--accent") }); const [lx, ly] = pt(i, R + 26); add("text", { x: lx, y: ly + 4, "text-anchor": "middle" }, `${TESTS[i].short} ${s}`); });
+  scores.forEach((s, i) => { const [x, y] = pt(i, R * Math.max(s, 3) / 100); add("circle", { cx: x, cy: y, r: 3.5, fill: css("--accent") }); const [lx, ly] = pt(i, R + 30); const anchor = Math.abs(lx - cx) < 5 ? "middle" : lx > cx ? "start" : "end"; add("text", { x: lx, y: ly + 4, "text-anchor": anchor }, `${TESTS[i].short} ${s}`); });
   return svg; }
 
+const WEEKDAYS = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
+function tier(s) { return s >= 85 ? "a'lo" : s >= 70 ? "yaxshi" : s >= 50 ? "o'rta" : "past"; }
 function renderResults(rec) {
-  showStage(false); progress.hidden = false; renderProgress(rec.results, -1);
-  const c = el("section", "card"); c.append(el("div", "step", `${GAME} #${rec.no} natijasi`));
-  const big = el("div", "score-big"); big.append(el("b", null, String(rec.total)), el("span", null, title(rec.total))); c.append(big, el("p", "lead", "Umumiy ball beshta testning o'rtachasi. 90+ «Burgut ko'z», 75+ «Ziyrak», 60+ «Hushyor», 40+ «Chamalar»."));
+  showStage(false); progress.hidden = true; setMeta(rec.no, rec.date);
+  const c = el("section", "card result-card");
+  const hero = el("div", "hero"); const num = el("div", "num"); num.append(el("b", null, String(rec.total)), el("span", null, title(rec.total)));
+  hero.append(el("div", "step", `${GAME} #${rec.no}${rec.date !== today ? " · arxiv" : ""}`), num, el("p", null, "beshta testning o'rtachasi · 90+ Burgut ko'z, 75+ Ziyrak, 60+ Hushyor, 40+ Chamalar")); c.append(hero);
   c.append(radar(TESTS.map(t => rec.results.find(r => r.id === t.id).score)));
-  const res = el("div", "res"); for (const t of TESTS) { const r = rec.results.find(x => x.id === t.id); const dot = el("i"); dot.style.cssText = `width:8px;height:8px;border-radius:50%;background:var(${t.color})`; res.append(dot); const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); res.append(mid, el("div", "pts", String(r.score))); const bar = el("div", "bar"); const fill = el("i"); fill.style.width = r.score + "%"; bar.append(fill); res.append(bar); } c.append(res);
-  const txt = shareText(rec); const pre = el("pre", "share", txt);
-  const row = el("div", "row"); const copy = btn("Natijani nusxalash", true, () => { try { navigator.clipboard.writeText(txt).then(() => toast("Nusxa olindi"), () => { selectPre(pre); toast("Matnni belgilab nusxa oling"); }); } catch { selectPre(pre); } });
+  const rows = el("div", "rows"); for (const t of TESTS) { const r = rec.results.find(x => x.id === t.id); const row = el("div", "rrow"); const dot = el("i"); dot.style.background = `var(${t.color})`; const mid = el("div"); mid.append(el("div", "nm", t.name), el("div", "det", r.human)); row.append(dot, mid, el("div", "pts", String(r.score)), el("div", "tier", tier(r.score))); rows.append(row); } c.append(rows);
+  const txt = shareText(rec);
+  const share = btn("Natijani ulashish", true, () => { const done = () => toast("Natija nusxalandi, endi istalgan joyga joylang"); try { navigator.clipboard.writeText(txt).then(done, () => toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning")); } catch { toast("Nusxalab bo'lmadi, Telegram tugmasidan foydalaning"); } }); share.classList.add("big");
   const tg = el("a", "btn", "Telegram'da ulashish"); tg.href = "https://t.me/share/url?url=" + encodeURIComponent(location.href.split("#")[0]) + "&text=" + encodeURIComponent(txt); tg.target = "_blank"; tg.rel = "noopener";
-  row.append(copy, tg); c.append(pre, row);
+  const r1 = el("div", "row center-row"); r1.append(share); const r2 = el("div", "row center-row"); r2.append(tg, btn("Arxiv", false, archive), btn("Mashq qilish", false, practiceMenu)); if (rec.date !== today) r2.append(btn("Bosh sahifa", false, home)); c.append(r1, r2);
+  if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`)); }
+  else c.append(el("p", "next", `Arxivdagi #${rec.no} (${prettyDate(rec.date)}). Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
   const st = statsOf(); const sg = el("div", "stats"); [["O'yinlar", st.played], ["Ketma-ket kun", st.streak], ["Eng yaxshi", st.best], ["O'rtacha", st.avg]].forEach(([k, v]) => { const d = el("div"); d.append(el("b", null, String(v)), el("small", null, k)); sg.append(d); }); c.append(sg);
-  if (rec.date === today) c.append(el("p", "lead", `Ertaga #${rec.no + 1} yangi jumboq chiqadi. Hozircha o'tgan kunlarni o'ynashingiz yoki istalgan testni mashq qilishingiz mumkin:`));
-  else c.append(el("p", "lead", `Bu arxivdagi #${rec.no} (${prettyDate(rec.date)}) jumboq. Arxiv natijalari ketma-ket kunlar hisobiga qo'shilmaydi.`));
-  const nav = el("div", "row"); nav.append(btn("Arxiv", false, archive)); if (rec.date !== today) nav.append(btn("Bosh sahifa", false, home)); c.append(nav, practiceRow());
-  setMeta(rec.no, rec.date); show(c);
+  show(c); window.scrollTo(0, 0);
 }
+function practiceMenu() { showStage(false); progress.hidden = true; const c = el("section", "card"); c.append(el("div", "step", "Mashq"), el("h2", null, "Qaysi testni mashq qilasiz?"), el("p", "lead", "Mashq natijalari hisobga olinmaydi, xohlagancha takrorlash mumkin."), practiceRow()); const row = el("div", "row"); row.append(btn("Orqaga", false, home)); c.append(row); show(c); }
 
 function archive() {
   showStage(false); progress.hidden = true; setMeta(todayNo, today); const hist = store.get("history", {});
