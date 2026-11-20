@@ -459,6 +459,20 @@ async function duelSweepOne(env, d) { // time's up: unanswered -> expired; accep
 }
 async function duelSweep(env) { const r = await env.DB.prepare("SELECT * FROM duels WHERE (status = 'pending' AND created < ?1) OR (status = 'active' AND accepted < ?1) LIMIT 50").bind(Date.now() - DUEL_TTL).all(); for (const d of r.results) await duelSweepOne(env, d).catch(() => {}); }
 
+const duelCta = { inline_keyboard: [[{ text: "⚔️ Duelga chaqirish", style: "primary", url: `https://t.me/${BOT_USER}?start=duel` }]] };
+// 19:00 Tashkent: short duel reminder in every group, with the group's duel leader and today's duel count
+async function duelNudge(env) {
+  const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all(), day = tzDay();
+  for (const g of groups.results) {
+    const lead = await env.DB.prepare("SELECT u.name, e.elo FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id JOIN duel_elo e ON e.chat_id = u.chat_id WHERE m.group_id = ? ORDER BY e.elo DESC LIMIT 1").bind(g.chat_id).first();
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM duels WHERE gid = ? AND day = ? AND status IN ('active','done')").bind(g.chat_id, day).first()).c;
+    const info = [n ? `Bugun guruhda ${n} ta duel bo'ldi.` : "", lead ? `Duel peshqadami: 🥇 <b>${esc(nm(lead))}</b> · ${lead.elo} ochko` : ""].filter(Boolean).join("\n");
+    const text = `<b>⚔️ Duel vaqti!</b>\n\nKunlik jumboqdan keyin kuch sinashmoqchimisiz? Guruhdoshingizni chaqiring, ikkalangizga <b>bir xil, yangi jumboq</b> beriladi.${info ? `\n\n${info}` : ""}\n\n<b>Boshlash: /duel</b> · Reyting: /duelreyting`;
+    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: duelCta });
+    if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
+    await new Promise(res => setTimeout(res, 40));
+  }
+}
 async function duelBoard(env, gid) {
   const r = await env.DB.prepare("SELECT u.name, e.elo, e.w, e.l, e.d FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id JOIN duel_elo e ON e.chat_id = u.chat_id WHERE m.group_id = ? ORDER BY e.elo DESC LIMIT 30").bind(gid).all();
   const text = r.results.length
@@ -603,6 +617,6 @@ export default {
     ctx.waitUntil(duelSweep(env).catch(() => {}));
     if (event.cron === "0 16 * * *") ctx.waitUntil(Promise.all([postBoards(env), watchMisses(env).catch(() => {})]));
     else if (event.cron === "0 4 * * *") ctx.waitUntil(Promise.all([remind(env, false), morningGroups(env)]));
-    else ctx.waitUntil(remind(env, true));
+    else ctx.waitUntil(Promise.all([remind(env, true), duelNudge(env).catch(() => {})]));
   },
 };
