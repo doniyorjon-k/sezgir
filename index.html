@@ -437,7 +437,7 @@ const ICONS = {
   anor: '<circle cx="12" cy="13.5" r="7.5"/><path d="M9.5 6.5 10.5 4h3l1 2.5"/><circle cx="9.5" cy="12.5" r=".9" fill="currentColor"/><circle cx="13.5" cy="11.5" r=".9" fill="currentColor"/><circle cx="12" cy="15.5" r=".9" fill="currentColor"/><circle cx="15" cy="15" r=".9" fill="currentColor"/>',
   chillak: '<path d="M3 20h18"/><path d="M5 17c3-11 9-11 13-1" stroke-dasharray="2 2.6"/><path d="m15.5 6.5 4-2"/>',
   minora: '<path d="M3 20.5h18"/><path d="m9.5 20.5 1-12h3l1 12"/><path d="M9 8.5h6"/><path d="M10.5 8.5V6a1.5 1.5 0 0 1 3 0v2.5"/><path d="M10.2 13h3.6M9.8 17h4.4"/>',
-  doira: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="4" r=".8" fill="currentColor"/><circle cx="20" cy="12" r=".8" fill="currentColor"/><circle cx="12" cy="20" r=".8" fill="currentColor"/><circle cx="4" cy="12" r=".8" fill="currentColor"/>',
+  ketmon: '<path d="M4 18.5h16"/><path d="M4 18.5 14.5 5"/><path d="M9.5 18.5a5.5 5.5 0 0 0-2.1-4.3"/>',
   non: '<circle cx="12" cy="12" r="8"/><path d="M12 12V4a8 8 0 0 1 7.6 10.5Z" fill="currentColor" fill-opacity=".22"/><circle cx="12" cy="12" r="2.6"/>',
   atlas: '<rect x="4" y="5" width="16" height="14" rx="2"/>'
 };
@@ -457,14 +457,6 @@ async function countdown(scene) { for (const n of ["3", "2", "1"]) { const t0 = 
 function legend(items, y = 470) { // items: [label, color]
   g.save(); g.font = `500 26px ${css("--font-body")}`; const widths = items.map(([t]) => g.measureText(t).width + 48); let x = 400 - widths.reduce((a, b) => a + b, 0) / 2; g.restore();
   items.forEach(([t, c], i) => { g.fillStyle = c; g.beginPath(); g.arc(x + 10, y, 8, 0, 7); g.fill(); text(t, x + 24, y, { size: 26, weight: 500, align: "left", color: css("--muted") }); x += widths[i]; }); }
-
-// ---------- audio ----------
-let ac = null, noiseBuf = null;
-function audio() { if (!ac) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; ac = new C(); noiseBuf = ac.createBuffer(1, ac.sampleRate * .2, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); } if (ac.state === "suspended") ac.resume(); return ac; }
-function doira(when, loud = 1) { const a = audio(); if (!a) return; // frame-drum hit: low body + skin slap
-  const o = a.createOscillator(), og = a.createGain(); o.type = "sine"; o.frequency.setValueAtTime(140, when); o.frequency.exponentialRampToValueAtTime(70, when + .18);
-  og.gain.setValueAtTime(.0001, when); og.gain.exponentialRampToValueAtTime(.9 * loud, when + .005); og.gain.exponentialRampToValueAtTime(.0001, when + .25); o.connect(og).connect(a.destination); o.start(when); o.stop(when + .3);
-  const n = a.createBufferSource(); n.buffer = noiseBuf; const f = a.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2200; f.Q.value = .8; const ng = a.createGain(); ng.gain.value = .5 * loud; n.connect(f).connect(ng).connect(a.destination); n.start(when); }
 
 // ---------- panel (the text area under the stage) ----------
 function live(main, sub) { const d = el("div", "live", main); if (sub) d.append(el("small", null, sub)); screen.replaceChildren(d); }
@@ -543,34 +535,32 @@ const TESTS = [
     g.save(); g.setLineDash([6, 6]); g.strokeStyle = css("--accent"); g.lineWidth = 2; g.beginPath(); g.moveTo(220, 450 - p.h); g.lineTo(600, 450 - p.h); g.stroke(); g.restore();
     text(`${Math.round(r.err * 100)}% farq`, 400, 40, { size: 36 }); legend([["asl minora", css("--accent")], ["siz qurgan", css("--ink")]], 478); } },
 
-{ id: "doira", name: "Doira", short: "Ritm", color: "--good", sigma: 100,
-  about: "Doira 6 marta uriladi. Keyin jimlikda o'sha usulni 8 marta o'zingiz davom ettirasiz.",
-  steps: ["Ovozni yoqing. Doira 6 marta bir xil tezlikda uriladi: unga qo'shilib bosing.", "6-zarbdan keyin doira jim bo'ladi.", "O'sha tezlikni ushlab, yana 8 marta o'zingiz bosing. Bosish: doiraga teging yoki Probel tugmasi."],
-  rule: "har zarbda o'rtacha 100 ms xato = 50 ball",
-  gen(r) { const bpm = r.int(72, 116); return { bpm, T: 60000 / bpm }; },
-  variants: { classic: { name: "Oddiy" }, jim: { name: "Jim", about: "Bugun ovoz yo'q: doira faqat ko'zga ko'rinib uriladi. 6 zarbni kuzating, keyin o'sha tezlikda 8 marta o'zingiz bosing." }, korlar: { name: "Ko'rmasdan", about: "Bugun doira qimirlamaydi, faqat ovozi eshitiladi. Ovozni yoqing, 6 zarbni tinglang, keyin 8 marta o'zingiz davom eting." } },
-  vary(r, p) { return p; },
-  drum(R, glow = 0) { g.fillStyle = "#d8c3a0"; g.beginPath(); g.arc(400, 215, R + 12, 0, 7); g.fill(); g.fillStyle = "#f3e9d6"; g.beginPath(); g.arc(400, 215, R, 0, 7); g.fill(); g.fillStyle = "#b49a73"; for (let i = 0; i < 24; i++) { const an = i / 24 * Math.PI * 2; g.beginPath(); g.arc(400 + Math.cos(an) * (R + 6), 215 + Math.sin(an) * (R + 6), 3, 0, 7); g.fill(); } if (glow) { g.save(); g.globalAlpha = glow * .35; g.fillStyle = css("--accent"); g.beginPath(); g.arc(400, 215, R, 0, 7); g.fill(); g.restore(); } },
-  dots(lead, solo, leadDone, soloDone) { const all = lead + solo, gap = 40, x0 = 400 - (all - 1) * gap / 2 - 10; for (let i = 0; i < all; i++) { const isLead = i < lead, x = x0 + i * gap + (isLead ? 0 : 20), filled = isLead ? i < leadDone : i - lead < soloDone; g.beginPath(); g.arc(x, 420, 9, 0, 7); if (filled) { g.fillStyle = isLead ? css("--muted") : css("--good"); g.fill(); } else { g.strokeStyle = css("--line"); g.lineWidth = 3; g.stroke(); } } text("doira", x0 + (lead - 1) * gap / 2, 458, { size: 18, weight: 500, color: css("--muted") }); text("siz", x0 + lead * gap + 20 + (solo - 1) * gap / 2, 458, { size: 18, weight: 500, color: css("--muted") }); },
-  preview() { clear(); this.drum(120); this.dots(6, 8, 0, 0); },
-  run(p) { return new Promise(res => { const a = audio(); const lead = 6, solo = 8; const start = performance.now() + 1500; const beats = Array.from({ length: lead }, (_, i) => start + i * p.T);
-    if (a && p.v !== "jim") { const off = a.currentTime - performance.now() / 1000; beats.forEach(b => doira(b / 1000 + off)); }
-    const last = beats[lead - 1]; const taps = []; let flash = -1e9, done = false, phase = "";
-    const tap = () => { if (done) return; const now = performance.now(); flash = now; if (now > last + p.T * .45) { taps.push(now); if (taps.length >= solo) finish(); } };
-    const onKey = e => { if (e.code === "Space" && !e.repeat) { e.preventDefault(); tap(); } };
-    cv.addEventListener("pointerdown", tap); window.addEventListener("keydown", onKey);
-    const finish = () => { done = true; cv.removeEventListener("pointerdown", tap); window.removeEventListener("keydown", onKey);
-      let errs = taps.map((t, i) => t - (last + (i + 1) * p.T)); const shift = Math.round(errs.reduce((s, x) => s + x, 0) / errs.length / p.T); errs = errs.map(x => x - shift * p.T);
-      const rms = Math.sqrt(errs.reduce((s, x) => s + x * x, 0) / errs.length), mean = errs.reduce((s, x) => s + x, 0) / errs.length;
-      res({ err: rms, human: `Har zarbda o'rtacha ${Math.round(rms)} ms xato. ${mean > 20 ? "Biroz sekinlashdingiz." : mean < -20 ? "Biroz shoshildingiz." : "Tempni yaxshi ushladingiz."}`, errs }); };
-    const loop = () => { if (done) return; const now = performance.now(); clear(); let pulse = 0; if (p.v !== "korlar") for (const b of beats) if (now >= b && now - b < 180) pulse = 1 - (now - b) / 180; const tp = now - flash < 140 ? 1 - (now - flash) / 140 : 0;
-      this.drum(118 + pulse * 14 + tp * 6, tp); const leadDone = p.v === "korlar" ? 0 : beats.filter(b => now >= b).length; this.dots(lead, solo, leadDone, taps.length);
-      const ph = now < start ? "wait" : now < last + p.T * .45 ? "lead" : "solo";
-      if (ph !== phase) { phase = ph; if (ph === "wait") live("Tayyorlaning...", p.v === "jim" ? "bugun ovoz bo'lmaydi, doiraga qarang" : "ovoz yoqilganini tekshiring"); else if (ph === "lead") live("Doira bilan birga bosing", "doiraga teging yoki Probel"); else live("Endi o'zingiz davom eting", "o'sha tezlikda 8 marta bosing"); }
-      requestAnimationFrame(loop); }; loop(); }); },
-  reveal(p, r) { clear(); g.strokeStyle = css("--muted"); g.lineWidth = 2; g.beginPath(); g.moveTo(110, 260); g.lineTo(720, 260); g.stroke(); text("erta", 60, 170, { size: 22, weight: 500, color: css("--muted") }); text("kech", 60, 350, { size: 22, weight: 500, color: css("--muted") });
-    r.errs.forEach((e, i) => { const x = 140 + i * 80; g.strokeStyle = css("--ink"); g.lineWidth = 3; g.beginPath(); g.moveTo(x, 244); g.lineTo(x, 276); g.stroke(); g.fillStyle = css("--good"); g.beginPath(); g.arc(x, 260 + clamp(e / 2.5, -140, 140), 10, 0, 7); g.fill(); });
-    text(`${Math.round(r.err)} ms`, 400, 60, { size: 40 }); legend([["kerakli zarb", css("--ink")], ["sizning bosishingiz", css("--good")]], 450); } },
+{ id: "ketmon", name: "Ketmon", short: "Burchak", color: "--good", sigma: 15,
+  about: "Burchak 1,5 soniya ko'rinadi. Keyin chiziqni burab, xuddi shu burchakni yasaysiz.",
+  steps: ["3-2-1 dan keyin ekranda burchak 1,5 soniya ko'rinadi.", "Uning kengligini eslab qoling: keyin burchak yo'qoladi.", "Chiziqni barmoq bilan burab, o'sha burchakni yasang va «Shu burchak»ni bosing."],
+  rule: "15° xato = 50 ball (aniq burchak = 100 ball)",
+  gen(r) { return { a: r.int(18, 162) }; }, // exactly one draw, like the test it replaced, so the next test's daily puzzle stays the same
+  variants: { classic: { name: "Oddiy" }, qiya: { name: "Qiya", about: "Bugun burchak qiya holda ko'rsatiladi. Siz uni tekis chiziq ustida, xuddi shu kenglikda yasaysiz." }, kozgu: { name: "Ko'zgu", about: "Bugun burchakni ko'zgudagidek, teskari tomonga ochib yasaysiz. Kengligi bir xil bo'lsin." } },
+  vary(r, p) { p.tilt = p.v === "qiya" ? r.range(15, 40) * (r.bool() ? 1 : -1) : 0; const d = r.range(45, 80); p.start = clamp(p.a + (p.a < 90 ? d : -d), 8, 172); return p; },
+  V: { x: 300, y: 300 }, L: 220, at(s) { this.V = { x: s > 0 ? 300 : 500, y: 300 }; },
+  pt(dir, len) { const t = dir * Math.PI / 180; return { x: this.V.x + Math.cos(t) * len, y: this.V.y - Math.sin(t) * len }; },
+  ray(dir, color, w = 10, dash = null, len = this.L) { const q = this.pt(dir, len); g.save(); g.strokeStyle = color; g.lineWidth = w; g.lineCap = "round"; if (dash) g.setLineDash(dash); g.beginPath(); g.moveTo(this.V.x, this.V.y); g.lineTo(q.x, q.y); g.stroke(); g.restore(); return q; },
+  arc(b, s, ang, color, rad = 52) { g.save(); g.strokeStyle = color; g.globalAlpha = .6; g.lineWidth = 3; g.beginPath(); const t0 = -b * Math.PI / 180, t1 = -(b + s * ang) * Math.PI / 180; g.arc(this.V.x, this.V.y, rad, t0, t1, s > 0); g.stroke(); g.restore(); },
+  vertex() { g.fillStyle = css("--ink"); g.beginPath(); g.arc(this.V.x, this.V.y, 8, 0, 7); g.fill(); },
+  angle(b, s, ang, color, withArc = true) { this.ray(b, css("--muted")); this.ray(b + s * ang, color); if (withArc) this.arc(b, s, ang, color); this.vertex(); },
+  preview() { clear(); this.at(1); this.angle(0, 1, 50, css("--good")); text("?", 560, 150, { size: 60, weight: 500, color: css("--accent") }); },
+  async run(p) { live("Burchakni eslab qoling", "burchak 1,5 soniya ko'rinadi"); this.at(1); await countdown(() => this.ray(p.tilt, css("--muted")));
+    const t0 = performance.now(); while (performance.now() - t0 < 1500) { clear(); this.angle(p.tilt, 1, p.a, css("--good")); timerBar((performance.now() - t0) / 1500); await frame(); }
+    const b = p.v === "kozgu" ? 180 : 0, s = p.v === "kozgu" ? -1 : 1; let u = p.start, drag = false; this.at(s);
+    live("Endi o'sha burchakni yasang", "chiziqni burang, so'ng «Shu burchak»ni bosing");
+    const draw = () => { clear(); this.ray(b, css("--muted")); const q = this.ray(b + s * u, css("--ink")); this.arc(b, s, u, css("--ink")); this.vertex(); g.fillStyle = css("--accent"); g.beginPath(); g.arc(q.x, q.y, 16, 0, 7); g.fill(); if (p.v === "kozgu") text("teskari tomonga oching", 400, 470, { size: 22, weight: 500, color: css("--muted") }); }; redraw = draw;
+    const setFrom = e => { const q = toLogical(e); let rel = s * (Math.atan2(this.V.y - q.y, q.x - this.V.x) * 180 / Math.PI - b); rel = ((rel % 360) + 540) % 360 - 180; if (rel < 0) rel = rel < -90 ? 180 : 0; u = clamp(rel, 0, 180); draw(); };
+    const down = e => { drag = true; cv.setPointerCapture(e.pointerId); setFrom(e); }, move = e => { if (drag) setFrom(e); }, up = () => drag = false;
+    const key = e => { const k = { ArrowUp: 1, ArrowRight: -s, ArrowDown: -1, ArrowLeft: s }[e.key]; if (k) { e.preventDefault(); u = clamp(u + k, 0, 180); draw(); } };
+    cv.addEventListener("pointerdown", down); cv.addEventListener("pointermove", move); cv.addEventListener("pointerup", up); window.addEventListener("keydown", key); draw();
+    return await new Promise(res => { const bt = btn("Shu burchak", true, () => { bt.remove(); cv.removeEventListener("pointerdown", down); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerup", up); window.removeEventListener("keydown", key); const d = Math.abs(u - p.a), mine = Math.round(u); res({ err: d, human: d < 1.5 ? "Burchakni deyarli aynan topdingiz!" : `Burchak ${p.a}° edi, siz ${mine}° yasadingiz: ${Math.round(d)}° ${u > p.a ? "keng" : "tor"}.`, u, b, s }); }); const row = el("div", "row"); row.append(bt); screen.append(row); }); },
+  reveal(p, r) { clear(); this.at(r.s); this.ray(r.b, css("--muted")); this.ray(r.b + r.s * r.u, css("--ink")); this.ray(r.b + r.s * p.a, css("--good"), 8, [14, 10]); this.arc(r.b, r.s, p.a, css("--good"), 64); this.vertex();
+    text(`${Math.round(r.err)}° farq`, 400, 40, { size: 36 }); legend([[`asl burchak · ${p.a}°`, css("--good")], [`siz yasagan · ${Math.round(r.u)}°`, css("--ink")]], 470); } },
 
 { id: "non", name: "Non bo'lish", short: "Ulush", color: "--gold", sigma: .05,
   about: "Nonning so'ralgan ulushini (masalan 3/8 yoki 35%) bir kesishda ajratasiz.",
@@ -602,11 +592,12 @@ const TESTS = [
 const VARIANTS_FROM = "2026-11-20"; // earlier puzzles stay classic so archived days replay the same
 function variantKeys(t) { return Object.keys(t.variants || { classic: 1 }); }
 function withVariant(t, p, seed, forced) { const r = rng(seed); const keys = variantKeys(t); p.v = forced || r.pick(keys); return t.vary ? t.vary(r, p) : p; }
+const NEW_TEST = { ketmon: "2026-11-21" }; // a test's first day is always the classic way
 function dailyParams(date) { const R = rng("sezgir-" + date); const params = TESTS.map(t => t.gen(R)); if (date < VARIANTS_FROM) return params.map(p => (p.v = "classic", p));
   // every day 3 or 4 of the 5 tests get a new way to play; the rest stay classic
   const D = rng("usul-" + date), order = TESTS.map((_, i) => i); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(D.next() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   const twisted = new Set(order.slice(0, D.next() < .5 ? 3 : 4));
-  return params.map((p, i) => { const t = TESTS[i], seed = `usul-${date}-${t.id}`; if (!twisted.has(i)) return withVariant(t, p, seed, "classic"); const keys = variantKeys(t).filter(k => k !== "classic"); return withVariant(t, p, seed, keys[Math.floor(rng(seed + "-k").next() * keys.length)]); }); }
+  return params.map((p, i) => { const t = TESTS[i], seed = `usul-${date}-${t.id}`; if (!twisted.has(i) || NEW_TEST[t.id] === date) return withVariant(t, p, seed, "classic"); const keys = variantKeys(t).filter(k => k !== "classic"); return withVariant(t, p, seed, keys[Math.floor(rng(seed + "-k").next() * keys.length)]); }); }
 function variantName(t, v) { return (t.variants && t.variants[v] && t.variants[v].name) || "Oddiy"; }
 
 // ---------- flow ----------
@@ -629,7 +620,7 @@ function intro(t, idx, total, p) { return new Promise(res => { showStage(false);
   if (total === 1) c.append(backLink("Mashqlar", practiceMenu)); c.append(el("div", "step", total > 1 ? `${idx + 1}-test · ${total} tadan` : "mashq · hisobga olinmaydi"), h);
   if (vv) c.append(el("p", "about usul-about", vv.about)); if (!vv) c.append(el("p", "about", t.about)); c.append(el("div", "rule", "Baholash: " + t.rule));
   const more = el("details", "more"); more.append(el("summary", null, "Batafsil yo'riq")); const ol = el("ol", "steps"); t.steps.forEach(x => ol.append(el("li", null, x))); more.append(ol);
-  const b = btn("Tayyorman", true, () => { audio(); res(); }); b.classList.add("big"); const row = el("div", "row center-row"); row.append(b); c.append(row, more); show(c); b.focus(); }); }
+  const b = btn("Tayyorman", true, () => res()); b.classList.add("big"); const row = el("div", "row center-row"); row.append(b); c.append(row, more); show(c); b.focus(); }); }
 
 const NEXT_SECONDS = 3;
 function verdict(t, r, s, nextLabel) { return new Promise(res => { const c = el("section", "panel"); const v = el("div", "verdict"); v.append(el("b", null, String(s)), el("span", "chip", `${grade(s)} · ${title(s)}`), el("div", "what", r.human)); c.append(el("div", "step", t.name + " natijasi"), v);
@@ -737,7 +728,7 @@ function statsOf() {
   return { played: days.length, streak, best: scores.length ? Math.max(...scores) : 0, avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0 };
 }
 // tests retired from the daily set, so old records still render
-const RETIRED = { atlas: { id: "atlas", name: "Atlas rangi", short: "Rang", color: "--muted" } };
+const RETIRED = { atlas: { id: "atlas", name: "Atlas rangi", short: "Rang", color: "--muted" }, doira: { id: "doira", name: "Doira", short: "Ritm", color: "--muted" } };
 function testsOf(rec) { return rec.results.map(r => TESTS.find(t => t.id === r.id) || RETIRED[r.id] || { id: r.id, name: r.id, short: r.id, color: "--muted" }); }
 function shareText(rec) { return tgText(rec, rec.date === today); }
 
@@ -863,7 +854,7 @@ function howTo(focusId) {
   const tests = el("div", "hw-tests"); let focusEl = null;
   TESTS.forEach((t, i) => { const r = el("div", "hw-test"); r.id = `hw-${t.id}`; const tile = el("span", "tile"); tile.append(icon(t, 24)); const mid = el("div"); mid.append(el("b", null, `${i + 1}. ${t.name}`), el("p", null, t.about), el("small", null, "Usullar: " + variantKeys(t).map(k => variantName(t, k)).join(", ") + " · Baholash: " + t.rule)); const tr = btn("Sinab ko'rish", false, () => practice(t)); tr.classList.add("sm"); r.append(tile, mid, tr); tests.append(r); if (t.id === focusId) { r.classList.add("focus"); focusEl = r; } });
   const grades = el("p", "hw-grades", GRADE_SCALE);
-  const tips = el("ul", "hw-tips"); ["Yangi jumboq har kuni yarim tunda chiqadi. Hamma bir xil topshiriqni o'ynaydi.", "Har bir testning 3 xil usuli bor: qaysi biri chiqishi har kuni o'zgaradi. Bugungi usul test oldidan aytiladi.", "Kuniga bir marta o'ynaladi. «Mashq qilish» natijalari hisobga olinmaydi.", "O'tkazib yuborgan kunlaringizni «Arxiv»dan o'ynashingiz mumkin.", "Doira testi uchun ovozni yoqing."].forEach(x => tips.append(el("li", null, x)));
+  const tips = el("ul", "hw-tips"); ["Yangi jumboq har kuni yarim tunda chiqadi. Hamma bir xil topshiriqni o'ynaydi.", "Har bir testning 3 xil usuli bor: qaysi biri chiqishi har kuni o'zgaradi. Bugungi usul test oldidan aytiladi.", "Kuniga bir marta o'ynaladi. «Mashq qilish» natijalari hisobga olinmaydi.", "O'tkazib yuborgan kunlaringizni «Arxiv»dan o'ynashingiz mumkin."].forEach(x => tips.append(el("li", null, x)));
   const row = el("div", "row center-row"); const doneToday = store.get("history", {})[today];
   row.append(btn(doneToday ? "Bugungi natijam" : "O'ynash", true, () => doneToday ? home() : playDaily(today)), btn("Mashq qilish", false, practiceMenu));
   c.append(el("h4", null, "O'yin tartibi"), flow, el("h4", null, "Beshta test"), tests, el("h4", null, "Baholar"), grades, el("h4", null, "Bilish foydali"), tips, row);
