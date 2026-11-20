@@ -356,6 +356,14 @@ i.v { background: var(--muted); opacity: .45; } i.p { background: var(--accent);
 .sup-anon input { accent-color: var(--gold); width: 16px; height: 16px; }
 .btn.gold { background: var(--gold); border-color: var(--gold); color: #1d1606; font-weight: 600; }
 .btn.gold:hover { filter: brightness(1.05); }
+.duel-vs { font-size: 34px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.duel-vs small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+.duel-verdict { text-align: center; font-weight: 600; font-size: 17px; }
+.duel-verdict.win { color: var(--accent); }
+.duel-rows { display: grid; grid-template-columns: minmax(0, 1fr) 56px 56px; gap: 8px 12px; font-size: 14px; align-items: center; }
+.duel-rows b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.duel-rows .h { color: var(--muted); font-size: 12px; text-align: right; }
+.duel-rules { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
 .sup-note { color: var(--muted); font-size: 13px; }
 .sup-note a { color: var(--gold); text-decoration: none; font-weight: 500; }
 .cardno { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--bg); }
@@ -820,7 +828,8 @@ function renderResults(rec) {
   tg.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); setTg(); T.openTelegramLink(tg.href); } });
   const s1 = el("div", "row center-row"); s1.append(tg); const s2 = el("div", "row center-row"); s2.append(img);
   if (BOT) { const gr = el("a", "btn"); gr.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 6.5a3 3 0 0 1 0 5.6M17.5 14.5a5 5 0 0 1 3 4.5"/></svg>'; gr.append("Guruhga qo'shish"); gr.href = `https://t.me/${BOT}?startgroup=sezgir`; gr.target = "_blank"; gr.rel = "noopener";
-    gr.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); T.openTelegramLink(gr.href); } }); s2.append(gr); } sb.append(s1, s2); c.append(sb); if (globalEl) c.append(globalEl); c.append(testsH, rows);
+    gr.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); T.openTelegramLink(gr.href); } }); s2.append(gr);
+    const du = el("a", "btn", "⚔️ Duelga chaqirish"); du.href = `https://t.me/${BOT}?start=duel`; du.target = "_blank"; du.rel = "noopener"; du.addEventListener("click", e => { const T = inTg(); if (T && T.openTelegramLink) { e.preventDefault(); T.openTelegramLink(du.href); } }); s2.append(du); } sb.append(s1, s2); c.append(sb); if (globalEl) c.append(globalEl); c.append(testsH, rows);
   const r2 = el("div", "row center-row"); if (isToday) r2.append(btn("Arxiv", false, archive)); r2.append(btn("Mashq qilish", false, practiceMenu)); if (!isToday) c.prepend(backLink("Arxiv", archive)); c.append(r2);
   if (rec.date === today) { const t = new Date(); t.setDate(t.getDate() + 1); c.append(el("p", "next", `Ertaga qaytib keling: #${rec.no + 1}, ${WEEKDAYS[t.getDay()]}, ${t.getDate()}-${MONTHS[t.getMonth()]}`));
     if (BOT) { const a = el("a", "remind"); a.href = `https://t.me/${BOT}?start=${clientId()}`; a.target = "_blank"; a.rel = "noopener"; a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>'; a.append("Har kuni Telegram'da eslatib turaylikmi?"); c.append(a); } }
@@ -917,6 +926,48 @@ function home() {
   try { T.ready(); T.expand(); if (T.isVersionAtLeast("7.7")) T.disableVerticalSwipes(); if (T.isVersionAtLeast("8.0") && /^(ios|android|android_x)$/.test(T.platform)) T.requestFullscreen(); } catch {}
   paint(); new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();
+// ---------- duel: both players get one random puzzle made for this duel only (opened from the bot with ?duel=<id>) ----------
+const DUEL_ID = (v => /^[a-z0-9]{10}$/.test(v || "") ? v : null)(new URLSearchParams(location.search).get("duel")); // read before readChallenge() clears the query
+function duelParams(seed) { const R = rng("duel-" + seed); return TESTS.map(t => withVariant(t, t.gen(R), `duel-${seed}-${t.id}`)); }
+function duelBody(extra) { const T = window.Telegram && window.Telegram.WebApp; return Object.assign({ id: DUEL_ID, client: clientId(), initData: T && T.initData || undefined }, extra); }
+async function duelSend(path, extra) { for (let i = 0; i < 3; i++) { const r = await api(path, duelBody(extra)); if (r) return r; await new Promise(ok => setTimeout(ok, 1200 * (i + 1))); } return null; }
+async function duelPage() {
+  showStage(false); progress.hidden = true; setMeta(todayNo, today);
+  const c = el("section", "card"); const h = el("h2", null, "Yuklanmoqda…"); c.append(backLink("Bosh sahifa", home), el("div", "step", "⚔️ Duel"), h); show(c); window.scrollTo(0, 0);
+  const pending = store.get("duelSend", null); // a finished game whose result did not reach the server yet
+  const r = pending && pending.id === DUEL_ID ? await duelSend("/duel/submit", { scores: pending.scores }) : await duelSend("/duel/info");
+  if (pending && r && r.state) store.set("duelSend", null);
+  if (!r || !r.state) { h.textContent = "Duel ochilmadi"; c.append(el("p", null, (r && r.error) || "Internet bilan bog'liq muammo. Birozdan keyin qayta urinib ko'ring.")); return; }
+  renderDuel(c, h, r.state);
+}
+function renderDuel(c, h, st) {
+  h.textContent = `Siz va ${st.opp}`;
+  const me = st.me;
+  if (st.status === "done") {
+    const v = el("div", "duel-vs"); v.append(`${me.score ?? 0} : ${st.oppScore}`); v.append(el("small", null, `siz · ${st.opp}`));
+    const win = (me.score ?? 0) > st.oppScore, draw = (me.score ?? 0) === st.oppScore;
+    const vd = el("div", "duel-verdict" + (win ? " win" : ""), draw ? "Durang 🤝" : win ? `G'alaba! +${Math.abs(st.delta)} ochko 🏆` : `Bu safar ${st.opp} yutdi. −${Math.abs(st.delta)} ochko`);
+    const rows = el("div", "duel-rows"); rows.append(el("span"), el("span", "h", "Siz"), el("span", "h", st.opp.slice(0, 8)));
+    TESTS.forEach((t, i) => rows.append(el("span", null, t.name), el("b", null, me.scores && me.scores[i] != null ? me.scores[i] : "–"), el("b", null, st.oppScores && st.oppScores[i] != null ? st.oppScores[i] : "–")));
+    c.append(v, vd, rows, el("p", "sup-note", `Duel ochkolaringiz: ${st.elo}. Yangi duel uchun botda /duel yozing.`)); return;
+  }
+  if (st.status === "pending") { c.append(el("p", null, st.side === "b" ? "Taklifni botdagi «Qabul qilish» tugmasi orqali qabul qiling." : `${st.opp} hali taklifni qabul qilmadi.`)); return; }
+  if (st.status !== "active") { c.append(el("p", null, "Bu duel bekor bo'lgan. Yangi duel uchun botda /duel yozing.")); return; }
+  if (me.done) { c.append(el("div", "duel-vs", `${grade(me.score)} · ${me.score}`), el("p", null, `${st.opp} hali o'ynamadi. Natija ikkalangiz o'ynab bo'lgach botda va guruhda e'lon qilinadi.`)); return; }
+  if (me.started) { c.append(el("p", null, "Bu duelni boshlagan edingiz, lekin oxiriga yetkazmadingiz. Qoidaga ko'ra natijangiz 0 hisoblanadi.")); return; }
+  const ul = el("ul", "duel-rules"); ["5 ta test, xuddi kunlik o'yindagidek.", `Siz va ${st.opp} bir xil jumboqni o'ynaysiz. U faqat shu duel uchun yaratilgan.`, "Faqat bitta urinish. Boshlagandan keyin chiqib ketsangiz, natija 0 hisoblanadi.", "G'olib duel reytingida ochko oladi. Kunlik reytingga ta'sir qilmaydi."].forEach(x => ul.append(el("li", null, x)));
+  const go = btn("Boshlash", true, () => playDuel(c, h, go)); go.classList.add("big"); const row = el("div", "row center-row"); row.append(go);
+  c.append(ul, row);
+}
+async function playDuel(c, h, go) {
+  go.disabled = true; const r = await duelSend("/duel/start");
+  if (!r || !r.seed) { go.disabled = false; if (r && r.state) { c.replaceChildren(backLink("Bosh sahifa", home), el("div", "step", "⚔️ Duel"), h); renderDuel(c, h, r.state); } else c.append(el("p", "sup-note", (r && r.error) || "Internet bilan bog'liq muammo, qayta bosing.")); return; }
+  const params = duelParams(r.seed), results = []; progress.hidden = false;
+  for (let i = 0; i < TESTS.length; i++) { const t = TESTS[i]; renderProgress(results, i); await intro(t, i, TESTS.length, params[i]); const { r: rr, s } = await runTest(t, params[i]); results.push({ id: t.id, score: s }); renderProgress(results, i + 1); await verdict(t, rr, s, i < TESTS.length - 1 ? `Keyingi test: ${TESTS[i + 1].name}` : "Duel natijasi"); }
+  const scores = results.map(x => x.score); store.set("duelSend", { id: DUEL_ID, scores });
+  await duelPage();
+}
+
 const OPEN_SUPPORT = new URLSearchParams(location.search).has("qollab"); // read before readChallenge() clears the query
 readChallenge();
 // Opened from the bot's menu button there is no ?cid=, so ask the bot which client belongs to this Telegram user;
@@ -929,7 +980,7 @@ readChallenge();
     if (p && Array.isArray(p.scores) && p.scores.length === TESTS.length && !store.get("history", {})[today]) { const params = dailyParams(today);
       const rec = { date: today, no: todayNo, total: p.total, results: TESTS.map((t, i) => ({ id: t.id, score: p.scores[i], human: "Boshqa qurilmada o'ynalgan.", v: params[i].v })), late: false, sent: true };
       const h = store.get("history", {}); h[today] = rec; store.set("history", h); } }
-  if (OPEN_SUPPORT && API && BOT) supportPage(home); else home();
+  if (DUEL_ID && API) duelPage(); else if (OPEN_SUPPORT && API && BOT) supportPage(home); else home();
 })();
 })();
 </script>

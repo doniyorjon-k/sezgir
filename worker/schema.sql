@@ -76,3 +76,16 @@ CREATE TABLE IF NOT EXISTS aliases (
   client TEXT NOT NULL,
   at     INTEGER NOT NULL
 );
+
+-- duels: a challenges b inside group gid; both play the puzzle made from `seed`
+CREATE TABLE IF NOT EXISTS duels (
+  id TEXT PRIMARY KEY, gid INTEGER NOT NULL, a INTEGER NOT NULL, b INTEGER NOT NULL, seed TEXT NOT NULL,
+  status TEXT NOT NULL, day TEXT NOT NULL, created INTEGER NOT NULL, accepted INTEGER,
+  a_start INTEGER, b_start INTEGER, a_score INTEGER, b_score INTEGER, a_scores TEXT, b_scores TEXT, delta INTEGER
+);
+CREATE INDEX IF NOT EXISTS duels_pair ON duels (day, a, b);
+CREATE INDEX IF NOT EXISTS duels_status ON duels (status, created);
+-- duel rating (Elo, starts at 1000)
+CREATE TABLE IF NOT EXISTS duel_elo (
+  chat_id INTEGER PRIMARY KEY, elo INTEGER NOT NULL DEFAULT 1000, w INTEGER NOT NULL DEFAULT 0, l INTEGER NOT NULL DEFAULT 0, d INTEGER NOT NULL DEFAULT 0
+);
