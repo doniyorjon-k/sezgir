@@ -390,14 +390,19 @@ export default {
         if (!todayAround().includes(b.date)) return json({ error: "only today's puzzle counts" }, 400, h);
         const scores = b.scores.map(Number); if (scores.some(s => !Number.isInteger(s) || s < 0 || s > 100)) return json({ error: "bad scores" }, 400, h);
         const total = Math.round(scores.reduce((a, s) => a + s, 0) / 5);
-        const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, b.client, total, JSON.stringify(scores), Date.now()).run();
+        // inside Telegram the play always goes to the Telegram user's own client, even if the page started with another one
+        // (whoami timed out on a slow network, or a second webview) - otherwise the group board never sees it
+        let client = b.client;
+        if (b.initData && env.TG_BOT_TOKEN) { const c = await whoami(env, String(b.initData), b.client).catch(() => null); if (c && CLIENT.test(c)) client = c; }
+        const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, client, total, JSON.stringify(scores), Date.now()).run();
         const fresh = !!ins.meta?.changes;
         if (fresh) {
           await bump(env, "p:" + b.date); await bump(env, "s:" + b.date, total);
-          if (!await env.DB.prepare("SELECT 1 FROM plays WHERE client = ? AND date <> ? LIMIT 1").bind(b.client, b.date).first()) await bump(env, "players");
-          ctx.waitUntil(announcePlay(env, b.client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, b.client).catch(() => {}));
+          if (!await env.DB.prepare("SELECT 1 FROM plays WHERE client = ? AND date <> ? LIMIT 1").bind(client, b.date).first()) await bump(env, "players");
+          ctx.waitUntil(announcePlay(env, client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, client).catch(() => {}));
         }
-        return json(await stats(env, b.date, total, fresh ? [total, scores] : null), 200, h);
+        const out = await stats(env, b.date, total, fresh ? [total, scores] : null);
+        return json(client !== b.client ? { ...out, client } : out, 200, h);
       }
       if (url.pathname === "/myplay" && req.method === "GET") { // lets a second device (or a fresh Telegram webview) show today's result instead of a new game
         const client = url.searchParams.get("client") || "", date = url.searchParams.get("date") || "";
