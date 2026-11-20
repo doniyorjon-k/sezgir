@@ -200,11 +200,11 @@ async function groupBoard(env, gid, day) { // members who played `day`, best fir
 }
 const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const boardLines = played => played.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}${r.sup ? " ⭐" : ""}, ${gradeOf(r.total)} · ${r.total}`);
-function boardText(title, day, b) {
+function boardText(title, day, b) { // HTML (parse_mode): title and closing line bold, names escaped
   if (!b.played.length) return null;
-  const lines = boardLines(b.played);
-  const idle = b.idle.length ? `\n\nHali o'ynamaganlar: ${b.idle.map(r => r.name || "O'yinchi").join(", ")} 👀` : "";
-  return `${title}\n\n${lines.join("\n")}${idle}`;
+  const lines = boardLines(b.played).map(esc);
+  const idle = b.idle.length ? `\n\n<b>Hali o'ynamaganlar: ${esc(b.idle.map(r => r.name || "O'yinchi").join(", "))} 👀</b>` : "";
+  return `<b>${esc(title)}</b>\n\n${lines.join("\n")}${idle}`;
 }
 
 async function joinGroup(env, chat, name, u, gid) {
@@ -238,7 +238,7 @@ async function onGroupMessage(env, msg) {
   if (cmd === "/reyting") {
     const day = tzDay(), b = await groupBoard(env, gid, day);
     const t = boardText(`Sezgir #${puzzleNo(day)} · bugungi reyting`, day, b);
-    await tg(env, "sendMessage", { chat_id: gid, text: t || (b.members ? "Bugun hali hech kim o'ynamadi. Birinchi bo'ling!" : "Reytingda hali hech kim yo'q. Qatnashish uchun tugmani bosing."), reply_markup: joinBtn(gid) });
+    await tg(env, "sendMessage", { chat_id: gid, text: t || (b.members ? "Bugun hali hech kim o'ynamadi. Birinchi bo'ling!" : "Reytingda hali hech kim yo'q. Qatnashish uchun tugmani bosing."), parse_mode: "HTML", reply_markup: joinBtn(gid) });
     return;
   }
   if (cmd === "/qatnashish") await tg(env, "sendMessage", { chat_id: gid, text: "Guruh bellashuviga qo'shilish uchun tugmani bosing. Bot sizga shaxsiy xabarda o'yin havolasini yuboradi.", reply_markup: joinBtn(gid) });
@@ -289,11 +289,11 @@ async function postBoards(env) { // 21:00 Tashkent: daily board; on Sunday also 
   for (const g of groups.results) {
     const b = await groupBoard(env, g.chat_id, day);
     const t = boardText(`Sezgir #${puzzleNo(day)} · kun yakuni`, day, b);
-    if (t) { const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text: t + "\n\nErtaga 9:00 da yangi jumboq.", reply_markup: joinBtn(g.chat_id) }); if (!r.ok && (r.error_code === 403 || r.error_code === 400)) { await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run(); continue; } }
+    if (t) { const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text: t + "\n\n<b>Ertaga 9:00 da yangi jumboq.</b>", parse_mode: "HTML", reply_markup: joinBtn(g.chat_id) }); if (!r.ok && (r.error_code === 403 || r.error_code === 400)) { await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run(); continue; } }
     if (sunday) {
       const from = shiftDay(day, -6);
       const w = await env.DB.prepare("SELECT u.name, SUM(p.total) AS sum, COUNT(*) AS days FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id JOIN plays p ON p.client = u.client AND p.date BETWEEN ? AND ? WHERE m.group_id = ? GROUP BY u.chat_id ORDER BY sum DESC LIMIT 5").bind(from, day, g.chat_id).all();
-      if (w.results.length) await tg(env, "sendMessage", { chat_id: g.chat_id, text: `🏆 Haftaning g'olibi: ${w.results[0].name || "O'yinchi"}!\n\n${w.results.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}: ${r.sum} ball (${r.days} kun)`).join("\n")}\n\nHaftalik hisob: 7 kunlik ballar yig'indisi, shuning uchun har kuni o'ynash muhim.` });
+      if (w.results.length) await tg(env, "sendMessage", { chat_id: g.chat_id, text: `<b>🏆 Haftaning g'olibi: ${esc(w.results[0].name || "O'yinchi")}!</b>\n\n${w.results.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${esc(r.name || "O'yinchi")}: ${r.sum} ball (${r.days} kun)`).join("\n")}\n\n<b>Haftalik hisob: 7 kunlik ballar yig'indisi, shuning uchun har kuni o'ynash muhim.</b>`, parse_mode: "HTML" });
     }
     await new Promise(res => setTimeout(res, 50));
   }
