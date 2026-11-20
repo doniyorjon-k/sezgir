@@ -105,6 +105,7 @@ async function onMessage(env, msg) {
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
   if (cmd === "/qollash" || (cmd === "/start" && arg === "qollash")) { const n = cmd === "/qollash" ? parseInt(arg, 10) : 0; return supportMenu(env, chat, n >= 1 && n <= 10000 ? n : 0); }
   if (cmd === "/duel" || (cmd === "/start" && arg === "duel")) return duelPicker(env, chat, chat, null);
+  if (cmd === "/start" && /^dg-?\d{1,20}$/.test(arg || "")) { const gid = Number(arg.slice(2)); await autoJoin(env, gid, msg.from); await env.DB.prepare("UPDATE tg_users SET active = 1 WHERE chat_id = ?").bind(chat).run(); return duelPicker(env, chat, chat, gid); }
   if (cmd === "/start" && arg && /^g-?\d{1,20}$/.test(arg)) return joinGroup(env, chat, name, u, Number(arg.slice(1)));
   if (cmd === "/start" && arg && /^v\d{1,5}(_\d{1,3}){5}(_[A-Za-z0-9_-]+)?$/.test(arg)) return openChallenge(env, chat, name, u, arg);
   if (cmd === "/start") {
@@ -236,6 +237,7 @@ async function onGroupMessage(env, msg) {
   if (msg.migrate_to_chat_id) { await env.DB.prepare("UPDATE tg_groups SET chat_id = ? WHERE chat_id = ?").bind(msg.migrate_to_chat_id, gid).run(); await env.DB.prepare("UPDATE tg_members SET group_id = ? WHERE group_id = ?").bind(msg.migrate_to_chat_id, gid).run(); return; }
   if (!cmd.startsWith("/")) return;
   await env.DB.prepare("INSERT INTO tg_groups (chat_id, title, active, created) VALUES (?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, active = 1").bind(gid, (msg.chat.title || "Guruh").slice(0, 60), Date.now()).run();
+  if (msg.from && cmd !== "/qatnashish") await autoJoin(env, gid, msg.from);
   if (cmd === "/reyting") {
     const day = tzDay(), b = await groupBoard(env, gid, day);
     const t = boardText(`Sezgir #${puzzleNo(day)} · bugungi reyting`, day, b);
@@ -268,7 +270,7 @@ async function announcePlay(env, client, date, total) { // "Aziz o'ynadi" in eac
   const rows = await env.DB.prepare("SELECT g.chat_id AS gid, u.name, u.chat_id AS uid FROM tg_users u JOIN tg_members m ON m.user_id = u.chat_id JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1 WHERE u.client = ?").bind(client).all();
   for (const r of rows.results) {
     const b = await groupBoard(env, r.gid, date); const rank = b.played.findIndex(p => p.chat_id === r.uid) + 1;
-    await tg(env, "sendMessage", { chat_id: r.gid, text: `${r.name || "O'yinchi"} o'ynadi: ${gradeOf(total)} · ${total} ball${rank ? ` (hozircha ${rank}-o'rin, ${b.played.length} kishidan)` : ""}` });
+    await tg(env, "sendMessage", { chat_id: r.gid, text: `${r.name || "O'yinchi"} o'ynadi: ${gradeOf(total)} · ${total} ball${rank ? ` (hozircha ${rank}-o'rin, ${b.played.length} kishidan)` : ""}`, reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp=g${r.gid}` }]] } });
   }
 }
 
@@ -281,7 +283,7 @@ async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note i
     const text = b.played.length // some already played after midnight: show the board so far
       ? `<b>☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting</b>\n\n${boardLines(b.played.slice(0, 10)).map(esc).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n<b>${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}</b>${yest ? `\n\n${yest}` : ""}`
       : `<b>☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?</b>${yest ? `\n\n${yest}` : ""}`;
-    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
+    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp=g${g.chat_id}` }]] } });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
   }
@@ -335,7 +337,7 @@ async function duelPicker(env, chat, from, gid) {
   const rows = gid
     ? (await env.DB.prepare("SELECT u.chat_id, u.name, m.group_id AS gid FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id WHERE m.group_id = ? ORDER BY u.name LIMIT 40").bind(gid).all()).results
     : (await env.DB.prepare("SELECT u.chat_id, u.name, MIN(m.group_id) AS gid FROM tg_members me JOIN tg_members m ON m.group_id = me.group_id AND m.user_id <> me.user_id JOIN tg_users u ON u.chat_id = m.user_id JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1 WHERE me.user_id = ? GROUP BY u.chat_id ORDER BY u.name LIMIT 40").bind(from).all()).results;
-  if (!rows.length) { await tg(env, "sendMessage", { chat_id: chat, text: gid ? "Bellashuvda hali hech kim yo'q. Avval /qatnashish orqali qo'shiling." : "Duel uchun avval biror guruhning bellashuviga qo'shiling. Raqiblar shu guruh a'zolaridan tanlanadi." }); return; }
+  if (!rows.length) { await tg(env, "sendMessage", { chat_id: chat, text: gid ? "Bellashuvda hali hech kim yo'q. Avval /qatnashish orqali qo'shiling." : "Siz hali biror guruh bellashuvida emassiz. Guruhingizda /duel yozing yoki u yerdagi «Duelga chaqirish» tugmasini bosing, bot sizni o'sha guruhga qo'shadi." }); return; }
   const kb = []; for (let i = 0; i < rows.length; i += 2) kb.push(rows.slice(i, i + 2).map(r => ({ text: nm(r).slice(0, 28), callback_data: `dp:${r.gid}:${r.chat_id}` })));
   await tg(env, "sendMessage", { chat_id: chat, text: "<b>⚔️ Duel</b>\n\nRaqibingizni tanlang. Ikkalangizga bir xil, faqat shu duel uchun yaratilgan jumboq beriladi. G'olib duel reytingida ochko oladi.", parse_mode: "HTML", reply_markup: { inline_keyboard: kb } });
 }
@@ -348,6 +350,8 @@ async function onCallback(env, q) {
 }
 
 async function duelPick(env, q, from, gid, target) {
+  if (q.message?.chat?.id === gid) await autoJoin(env, gid, q.from); // tapped in that group: they are in it
+  if (!await canDM(env, from)) return tg(env, "answerCallbackQuery", { callback_query_id: q.id, url: `https://t.me/${BOT_USER}?start=dg${gid}` }); // opens the bot; Start shows the picker in private
   const a = await duelUser(env, from), b = await duelUser(env, target);
   if (!a) return answerCb(env, q, "Avval bellashuvga qo'shiling: guruhdagi «Qatnashish» tugmasini bosing.", true);
   if (!b) return answerCb(env, q, "Bu o'yinchi topilmadi.", true);
@@ -363,7 +367,7 @@ async function duelPick(env, q, from, gid, target) {
   await env.DB.prepare("INSERT INTO duels (id, gid, a, b, seed, status, day, created) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)").bind(id, gid, from, target, rid(12), day, Date.now()).run();
   const [ea, eb] = [await eloOf(env, from), await eloOf(env, target)];
   const dm = await tg(env, "sendMessage", { chat_id: target, text: `<b>⚔️ ${esc(nm(a))} sizni duelga chaqirdi!</b>\n\nIkkalangiz bir xil, faqat shu duel uchun yaratilgan jumboqni o'ynaysiz. G'olib duel reytingida ochko oladi.\n\nDuel ochkolari: ${esc(nm(a))} ${ea} · siz ${eb}\n\n<b>24 soat ichida javob bering.</b>`, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "✅ Qabul qilish", style: "success", callback_data: `da:${id}` }, { text: "Rad etish", callback_data: `dr:${id}` }]] } });
-  if (!dm.ok) { await env.DB.prepare("UPDATE duels SET status = 'expired' WHERE id = ?").bind(id).run(); return answerCb(env, q, `${nm(b)} botni to'xtatib qo'ygan, taklif yetib bormadi.`, true); }
+  if (!dm.ok) { await env.DB.prepare("UPDATE duels SET status = 'expired' WHERE id = ?").bind(id).run(); return answerCb(env, q, `Taklif ${nm(b)}ga yetib bormadi: u hali botga «Start» bosmagan. Unga @${BOT_USER} ni ochib Start bosishini ayting.`, true); }
   await answerCb(env, q, `Taklif ${nm(b)}ga yuborildi ✅`);
   await tg(env, "sendMessage", { chat_id: gid, text: `⚔️ ${esc(nm(a))} ${esc(nm(b))}ni duelga chaqirdi!`, parse_mode: "HTML" });
 }
@@ -459,7 +463,7 @@ async function duelSweepOne(env, d) { // time's up: unanswered -> expired; accep
 }
 async function duelSweep(env) { const r = await env.DB.prepare("SELECT * FROM duels WHERE (status = 'pending' AND created < ?1) OR (status = 'active' AND accepted < ?1) LIMIT 50").bind(Date.now() - DUEL_TTL).all(); for (const d of r.results) await duelSweepOne(env, d).catch(() => {}); }
 
-const duelCta = { inline_keyboard: [[{ text: "⚔️ Duelga chaqirish", style: "primary", url: `https://t.me/${BOT_USER}?start=duel` }]] };
+const duelCta = gid => ({ inline_keyboard: [[{ text: "⚔️ Duelga chaqirish", style: "primary", url: `https://t.me/${BOT_USER}?start=dg${gid}` }]] });
 // 19:00 Tashkent: short duel reminder in every group, with the group's duel leader and today's duel count
 async function duelNudge(env) {
   const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all(), day = tzDay();
@@ -468,7 +472,7 @@ async function duelNudge(env) {
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM duels WHERE gid = ? AND day = ? AND status IN ('active','done')").bind(g.chat_id, day).first()).c;
     const info = [n ? `Bugun guruhda ${n} ta duel bo'ldi.` : "", lead ? `Duel peshqadami: 🥇 <b>${esc(nm(lead))}</b> · ${lead.elo} ochko` : ""].filter(Boolean).join("\n");
     const text = `<b>⚔️ Duel vaqti!</b>\n\nKunlik jumboqdan keyin kuch sinashmoqchimisiz? Guruhdoshingizni chaqiring, ikkalangizga <b>bir xil, yangi jumboq</b> beriladi.${info ? `\n\n${info}` : ""}\n\n<b>Boshlash: /duel</b> · Reyting: /duelreyting`;
-    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: duelCta });
+    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: duelCta(g.chat_id) });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
   }
@@ -490,7 +494,7 @@ async function tgUser(env, initData) {
   const sig = [...await hmac(await hmac("WebAppData", env.TG_BOT_TOKEN), dcs)].map(b => b.toString(16).padStart(2, "0")).join("");
   if (sig !== hash) return null;
   if (Date.now() / 1000 - Number(q.get("auth_date") || 0) > 90 * 86400) return null; // stale session
-  try { const u = JSON.parse(q.get("user") || "null"); return u && Number.isInteger(u.id) ? u : null; } catch { return null; }
+  try { const u = JSON.parse(q.get("user") || "null"); if (u && Number.isInteger(u.id)) { u.start = q.get("start_param") || ""; return u; } return null; } catch { return null; }
 }
 // One person, several device ids (a browser tab, a second webview): remember `from` as an alias of `to`
 // and move its plays over (only days `to` has not played). Never touches another Telegram user's main id.
@@ -514,13 +518,29 @@ async function watchMisses(env) {
   await tg(env, "sendMessage", { chat_id: OWNER_ID, text: `Nazorat: bugun quyidagilarning natijasi Telegram akkauntiga ulanmagan bo'lishi mumkin (qo'shilgan vaqtiga yaqin nomsiz o'yin bor).\n\n` + r.results.map(x => `• ${x.name}: ${x.total} ball, ${t(x.created)}`).join("\n") + "\n\nTekshirib, ularni ulash kerak bo'lishi mumkin." });
 }
 
+// Group membership must never depend on the "Qatnashish" button alone: anyone who acts in a group
+// (a command, a button there, or opening the game from that group's button) joins that group's board.
+const gidParam = s => /^g-?\d{1,20}$/.test(s || "") ? Number(s.slice(1)) : null;
+async function autoJoin(env, gid, from, announce = true) {
+  if (!gid || !from || !Number.isInteger(from.id) || from.is_bot) return false;
+  if (!await env.DB.prepare("SELECT 1 FROM tg_groups WHERE chat_id = ? AND active = 1").bind(gid).first()) return false;
+  const name = [from.first_name, from.last_name].filter(Boolean).join(" ").slice(0, 40) || "O'yinchi";
+  await env.DB.prepare("INSERT OR IGNORE INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 0, ?)").bind(from.id, newClient(), name, Date.now()).run();
+  const r = await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(gid, from.id, Date.now()).run();
+  if (!r.meta?.changes) return false;
+  if (announce) await tg(env, "sendMessage", { chat_id: gid, text: `${(await duelUser(env, from.id))?.name || name} bellashuvga qo'shildi 👋` });
+  return true;
+}
+const canDM = async (env, id) => (await tg(env, "sendChatAction", { chat_id: id, action: "typing" })).ok;
+
 // The bot's menu button opens the site without ?cid=, so the Mini App asks which site client belongs to this Telegram user.
 async function whoami(env, initData, client) {
   const u = await tgUser(env, initData); if (!u) return null;
   const row = await env.DB.prepare("SELECT client FROM tg_users WHERE chat_id = ?").bind(u.id).first();
-  if (row) { if (row.client !== client) await adoptClient(env, client, row.client); return row.client; }
+  if (row) { if (row.client !== client) await adoptClient(env, client, row.client); await autoJoin(env, gidParam(u.start), u); return row.client; }
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ").slice(0, 60) || "Do'st";
   await env.DB.prepare("INSERT OR IGNORE INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 0, ?)").bind(u.id, client, name, Date.now()).run();
+  await autoJoin(env, gidParam(u.start), u);
   return client;
 }
 export default {
