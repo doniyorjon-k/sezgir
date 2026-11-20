@@ -107,7 +107,9 @@ async function onMessage(env, msg) {
   if (cmd === "/start" && arg && /^g-?\d{1,20}$/.test(arg)) return joinGroup(env, chat, name, u, Number(arg.slice(1)));
   if (cmd === "/start" && arg && /^v\d{1,5}(_\d{1,3}){5}(_[A-Za-z0-9_-]+)?$/.test(arg)) return openChallenge(env, chat, name, u, arg);
   if (cmd === "/start") {
-    const client = arg && CLIENT.test(arg) ? arg : (u?.client || newClient());
+    const siteClient = arg && CLIENT.test(arg) ? arg : null;
+    const client = u?.client || siteClient || newClient();
+    if (siteClient && u?.client) await adoptClient(env, siteClient, u.client); // site opened in a browser: its plays join this Telegram user
     await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET client = excluded.client, name = excluded.name, active = 1").bind(chat, client, name, Date.now()).run();
     const { streak } = await streakOf(env, client);
     const linked = arg && CLIENT.test(arg) ? `\n\nSaytdagi natijalaringiz ulandi${streak ? `, seriyangiz: ${streak} kun 🔥` : ""}.` : "";
@@ -209,8 +211,8 @@ async function joinGroup(env, chat, name, u, gid) {
   const client = u?.client || newClient();
   await env.DB.prepare("INSERT INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 1, ?) ON CONFLICT(chat_id) DO UPDATE SET name = excluded.name").bind(chat, client, name, Date.now()).run();
   const fresh = await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(gid, chat, Date.now()).run();
-  await tg(env, "sendMessage", { chat_id: chat, text: `Siz «${g.title}» guruhi reytingiga qo'shildingiz ✅\n\nO'ynaganingizdan keyin natijangiz guruhda ko'rinadi. Har kuni 21:00 da bot guruhga kunlik reytingni yozadi.\n\nMuhim: natija hisobga olinishi uchun pastdagi tugma orqali o'ynang.`, reply_markup: playBtn(client) });
-  if (fresh.meta?.changes) await tg(env, "sendMessage", { chat_id: gid, text: `${name || "Yangi o'yinchi"} reytingga qo'shildi 👋` });
+  await tg(env, "sendMessage", { chat_id: chat, text: `Siz «${g.title}» guruhi bellashuviga qo'shildingiz ✅\n\nO'ynaganingizdan keyin natijangiz guruhda ko'rinadi. Har kuni 21:00 da bot guruhga kunlik reytingni yozadi.\n\nMuhim: natija hisobga olinishi uchun pastdagi tugma orqali o'ynang.`, reply_markup: playBtn(client) });
+  if (fresh.meta?.changes) await tg(env, "sendMessage", { chat_id: gid, text: `${name || "Yangi o'yinchi"} bellashuvga qo'shildi 👋` });
 }
 
 function unb64url(b) { try { const bin = atob(b.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))).replace(/[<>]/g, "").trim().slice(0, 24); } catch { return ""; } }
@@ -237,7 +239,7 @@ async function onGroupMessage(env, msg) {
     await tg(env, "sendMessage", { chat_id: gid, text: t || (b.members ? "Bugun hali hech kim o'ynamadi. Birinchi bo'ling!" : "Reytingda hali hech kim yo'q. Qatnashish uchun tugmani bosing."), reply_markup: joinBtn(gid) });
     return;
   }
-  if (cmd === "/qatnashish") await tg(env, "sendMessage", { chat_id: gid, text: "Guruh reytingiga qo'shilish uchun tugmani bosing. Bot sizga shaxsiy xabarda o'yin havolasini yuboradi.", reply_markup: joinBtn(gid) });
+  if (cmd === "/qatnashish") await tg(env, "sendMessage", { chat_id: gid, text: "Guruh bellashuviga qo'shilish uchun tugmani bosing. Bot sizga shaxsiy xabarda o'yin havolasini yuboradi.", reply_markup: joinBtn(gid) });
 }
 
 async function onMyChatMember(env, upd) {
@@ -252,7 +254,7 @@ async function onMyChatMember(env, upd) {
       await env.DB.prepare("INSERT OR IGNORE INTO tg_members (group_id, user_id, joined) VALUES (?, ?, ?)").bind(chat.id, by.id, Date.now()).run();
       adder = name; }
     if (upd.old_chat_member?.status === "left" || upd.old_chat_member?.status === "kicked")
-      await tg(env, "sendMessage", { chat_id: chat.id, text: `Salom, «${chat.title || "guruh"}»! Men Sezgir botiman 👋\n\nHar kuni 5 ta qisqa idrok testi. Kim o'ynasa, natijasini shu yerga yozaman, 21:00 da esa kunlik reytingni chiqaraman. Yakshanba kuni haftaning g'olibini e'lon qilaman.\n\n${adder ? `${adder} reytingga qo'shildi. ` : ""}Qatnashish uchun pastdagi tugmani bosing.\n/reyting — bugungi reyting`, reply_markup: joinBtn(chat.id) });
+      await tg(env, "sendMessage", { chat_id: chat.id, text: `Salom, «${chat.title || "guruh"}»! Men Sezgir botiman 👋\n\nHar kuni 5 ta qisqa idrok testi. Kim o'ynasa, natijasini shu yerga yozaman, 21:00 da esa kunlik reytingni chiqaraman. Yakshanba kuni haftaning g'olibini e'lon qilaman.\n\n${adder ? `${adder} bellashuvga qo'shildi. ` : ""}Qatnashish uchun pastdagi tugmani bosing.\n/reyting — bugungi reyting`, reply_markup: joinBtn(chat.id) });
   } else if (st === "left" || st === "kicked") await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(chat.id).run();
 }
 
@@ -321,11 +323,33 @@ async function tgUser(env, initData) {
   if (Date.now() / 1000 - Number(q.get("auth_date") || 0) > 90 * 86400) return null; // stale session
   try { const u = JSON.parse(q.get("user") || "null"); return u && Number.isInteger(u.id) ? u : null; } catch { return null; }
 }
+// One person, several device ids (a browser tab, a second webview): remember `from` as an alias of `to`
+// and move its plays over (only days `to` has not played). Never touches another Telegram user's main id.
+async function adoptClient(env, from, to) {
+  if (!from || !to || from === to || !CLIENT.test(from) || !CLIENT.test(to)) return 0;
+  if (await env.DB.prepare("SELECT 1 FROM tg_users WHERE client = ?").bind(from).first()) return 0;
+  await env.DB.prepare("INSERT INTO aliases (alias, client, at) VALUES (?, ?, ?) ON CONFLICT(alias) DO UPDATE SET client = excluded.client, at = excluded.at").bind(from, to, Date.now()).run();
+  const r = await env.DB.prepare("UPDATE plays SET client = ? WHERE client = ? AND date NOT IN (SELECT date FROM plays WHERE client = ?)").bind(to, from, to).run();
+  return r.meta?.changes || 0;
+}
+async function mainClient(env, client) { const a = await env.DB.prepare("SELECT client FROM aliases WHERE alias = ?").bind(client).first(); return a ? a.client : client; }
+// 21:00 check for the owner: a play that landed on an unknown id within 15 min of someone joining, while that person shows no play today
+async function watchMisses(env) {
+  const day = tzDay(), win = 15 * 60e3;
+  const r = await env.DB.prepare(`SELECT DISTINCT u.name, p.total, p.created FROM plays p
+    JOIN tg_users u ON (ABS(p.created - u.created) < ?1 OR EXISTS (SELECT 1 FROM tg_members m WHERE m.user_id = u.chat_id AND ABS(p.created - m.joined) < ?1))
+    WHERE p.date = ?2 AND p.client NOT IN (SELECT client FROM tg_users WHERE client IS NOT NULL) AND p.client NOT IN (SELECT alias FROM aliases)
+      AND NOT EXISTS (SELECT 1 FROM plays q WHERE q.date = ?2 AND q.client = u.client)`).bind(win, day).all();
+  if (!r.results.length) return;
+  const t = ms => new Date(ms + 5 * 3600e3).toISOString().slice(11, 16);
+  await tg(env, "sendMessage", { chat_id: OWNER_ID, text: `Nazorat: bugun quyidagilarning natijasi Telegram akkauntiga ulanmagan bo'lishi mumkin (qo'shilgan vaqtiga yaqin nomsiz o'yin bor).\n\n` + r.results.map(x => `• ${x.name}: ${x.total} ball, ${t(x.created)}`).join("\n") + "\n\nTekshirib, ularni ulash kerak bo'lishi mumkin." });
+}
+
 // The bot's menu button opens the site without ?cid=, so the Mini App asks which site client belongs to this Telegram user.
 async function whoami(env, initData, client) {
   const u = await tgUser(env, initData); if (!u) return null;
   const row = await env.DB.prepare("SELECT client FROM tg_users WHERE chat_id = ?").bind(u.id).first();
-  if (row) return row.client;
+  if (row) { if (row.client !== client) await adoptClient(env, client, row.client); return row.client; }
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ").slice(0, 60) || "Do'st";
   await env.DB.prepare("INSERT OR IGNORE INTO tg_users (chat_id, client, name, active, created) VALUES (?, ?, ?, 0, ?)").bind(u.id, client, name, Date.now()).run();
   return client;
@@ -394,6 +418,7 @@ export default {
         // (whoami timed out on a slow network, or a second webview) - otherwise the group board never sees it
         let client = b.client;
         if (b.initData && env.TG_BOT_TOKEN) { const c = await whoami(env, String(b.initData), b.client).catch(() => null); if (c && CLIENT.test(c)) client = c; }
+        if (client === b.client) client = await mainClient(env, client); // a browser id already linked to a Telegram user
         const ins = await env.DB.prepare("INSERT OR IGNORE INTO plays (date, client, total, scores, created) VALUES (?, ?, ?, ?, ?)").bind(b.date, client, total, JSON.stringify(scores), Date.now()).run();
         const fresh = !!ins.meta?.changes;
         if (fresh) {
@@ -415,7 +440,7 @@ export default {
   },
   async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
     if (!env.TG_BOT_TOKEN) return;
-    if (event.cron === "0 16 * * *") ctx.waitUntil(postBoards(env));
+    if (event.cron === "0 16 * * *") ctx.waitUntil(Promise.all([postBoards(env), watchMisses(env).catch(() => {})]));
     else if (event.cron === "0 4 * * *") ctx.waitUntil(Promise.all([remind(env, false), morningGroups(env)]));
     else ctx.waitUntil(remind(env, true));
   },

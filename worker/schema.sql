@@ -69,3 +69,10 @@ CREATE TABLE IF NOT EXISTS snap (
   at   INTEGER NOT NULL,
   data TEXT NOT NULL
 );
+
+-- other device ids of the same person (browser tab, second webview) -> the Telegram user's main id
+CREATE TABLE IF NOT EXISTS aliases (
+  alias  TEXT PRIMARY KEY,
+  client TEXT NOT NULL,
+  at     INTEGER NOT NULL
+);
