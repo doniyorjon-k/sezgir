@@ -141,10 +141,10 @@ async function remind(env, evening) {
     const { streak, todayRec } = await streakOf(env, u.client);
     let text;
     if (!evening && todayRec != null) continue; // already played after midnight
-    if (!evening) text = `☀️ Sezgir #${no} tayyor. Bugungi beshta test sizni kutmoqda.${streak ? `\nSeriyangiz: ${streak} kun 🔥` : ""}`;
+    if (!evening) text = `☀️ Sezgir #${no} tayyor. Bugungi beshta test sizni kutmoqda.${streak ? `\nSeriyangiz: ${streak} kun 🔥` : ""}${newsOf(day) ? `\n\n${newsOf(day)}` : ""}`;
     else if (todayRec == null && streak > 0) text = `Bugun hali o'ynamadingiz. ${streak} kunlik seriyangiz yarim tunda uziladi 🔥`;
     if (!text) continue;
-    const r = await tg(env, "sendMessage", { chat_id: u.chat_id, text, reply_markup: playBtn(u.client) });
+    const r = await tg(env, "sendMessage", { chat_id: u.chat_id, text: evening ? text : esc(text).replace(/&lt;(\/?b)&gt;/g, "<$1>"), parse_mode: evening ? undefined : "HTML", reply_markup: playBtn(u.client) });
     if (!r.ok && r.error_code === 403) await env.DB.prepare("UPDATE tg_users SET active = 0 WHERE chat_id = ?").bind(u.chat_id).run();
     await new Promise(res => setTimeout(res, 40)); // stay under Telegram's ~30 msg/s
   }
@@ -274,15 +274,19 @@ async function announcePlay(env, client, date, total) { // "Aziz o'ynadi" in eac
   }
 }
 
+// one-off news line for the 09:00 messages, keyed by day (HTML; bold parts in <b>)
+const NEWS = { "2026-11-21": "🆕 <b>Yangi test: Ketmon!</b> Doira o'rniga endi burchak sezgisi bor: burchak 1,5 soniya ko'rinadi, keyin uni xotiradan yasaysiz. <b>Kim aniqroq topar ekan?</b>" };
+const newsOf = day => NEWS[day] || "";
 async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note in each group, with yesterday's winner
   const day = tzDay(), yday = shiftDay(day, -1);
   const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all();
   for (const g of groups.results) {
     const w = (await groupBoard(env, g.chat_id, yday)).played[0], b = await groupBoard(env, g.chat_id, day);
+    const news = newsOf(day) ? `\n\n${newsOf(day)}` : "";
     const yest = w ? `Kechagi g'olib: 🥇 ${esc(w.name || "O'yinchi")}, ${gradeOf(w.total)} · ${w.total}` : ""; // HTML message: names escaped, key lines bold
     const text = b.played.length // some already played after midnight: show the board so far
-      ? `<b>☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting</b>\n\n${boardLines(b.played.slice(0, 10)).map(esc).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n<b>${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}</b>${yest ? `\n\n${yest}` : ""}`
-      : `<b>☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?</b>${yest ? `\n\n${yest}` : ""}`;
+      ? `<b>☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting</b>${news}\n\n${boardLines(b.played.slice(0, 10)).map(esc).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n<b>${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}</b>${yest ? `\n\n${yest}` : ""}`
+      : `<b>☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?</b>${news}${yest ? `\n\n${yest}` : ""}`;
     const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp=g${g.chat_id}` }]] } });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
@@ -463,6 +467,30 @@ async function duelSweepOne(env, d) { // time's up: unanswered -> expired; accep
 }
 async function duelSweep(env) { const r = await env.DB.prepare("SELECT * FROM duels WHERE (status = 'pending' AND created < ?1) OR (status = 'active' AND accepted < ?1) LIMIT 50").bind(Date.now() - DUEL_TTL).all(); for (const d of r.results) await duelSweepOne(env, d).catch(() => {}); }
 
+// hourly: one-time nudges so duels don't just run out. bits in duels.nudged: 1 = unanswered invite (6h), 2 = unplayed after 3h, 4 = unplayed with 3h left
+const H = 36e5;
+async function duelRemind(env) {
+  const hr = (new Date().getUTCHours() + 5) % 24; if (hr >= 23 || hr < 8) return; // no DMs at night (Tashkent)
+  const now = Date.now(), left = t => Math.max(1, Math.ceil((DUEL_TTL - (now - t)) / H));
+  const pend = await env.DB.prepare("SELECT * FROM duels WHERE status = 'pending' AND nudged & 1 = 0 AND created < ?1 AND created > ?2 LIMIT 50").bind(now - 6 * H, now - DUEL_TTL).all();
+  for (const d of pend.results) {
+    await env.DB.prepare("UPDATE duels SET nudged = nudged | 1 WHERE id = ?").bind(d.id).run();
+    const a = await duelUser(env, d.a);
+    await tg(env, "sendMessage", { chat_id: d.b, text: `<b>⚔️ ${esc(nm(a))} sizni duelda kutyapti!</b>\n\nChaqiruvga javob berishga <b>${left(d.created)} soat</b> qoldi.`, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "✅ Qabul qilish", style: "success", callback_data: `da:${d.id}` }, { text: "Rad etish", callback_data: `dr:${d.id}` }]] } });
+  }
+  const act = await env.DB.prepare("SELECT * FROM duels WHERE status = 'active' AND nudged & 6 <> 6 AND accepted < ?1 AND accepted > ?2 LIMIT 50").bind(now - 3 * H, now - DUEL_TTL).all();
+  for (const d of act.results) {
+    const late = now - d.accepted > DUEL_TTL - 3 * H, bit = late ? 6 : 2;
+    if ((d.nudged & bit) === bit) continue;
+    await env.DB.prepare("UPDATE duels SET nudged = nudged | ? WHERE id = ?").bind(bit, d.id).run();
+    for (const [me, other, start, score] of [[d.a, d.b, d.a_start, d.a_score], [d.b, d.a, d.b_start, d.b_score]]) {
+      if (start || score != null) continue; // played, or started (one attempt only)
+      const u = await duelUser(env, me), o = await duelUser(env, other); if (!u) continue;
+      await tg(env, "sendMessage", { chat_id: me, text: `<b>⚔️ ${esc(nm(o))} bilan duelingiz kutyapti!</b>\n\nO'ynash uchun <b>${left(d.accepted)} soat</b> qoldi. Vaqt tugasa, natijangiz 0 hisoblanadi.`, parse_mode: "HTML", reply_markup: duelBtn(d.id, u.client) });
+    }
+  }
+}
+
 const duelCta = gid => ({ inline_keyboard: [[{ text: "⚔️ Duelga chaqirish", style: "primary", url: `https://t.me/${BOT_USER}?start=dg${gid}` }]] });
 // 19:00 Tashkent: short duel reminder in every group, with the group's duel leader and today's duel count
 async function duelNudge(env) {
@@ -632,11 +660,11 @@ export default {
       return json({ error: "not found" }, 404, h);
     } catch (e) { return json({ error: "server error" }, 500, h); }
   },
-  async scheduled(event, env, ctx) { // 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
+  async scheduled(event, env, ctx) { // hourly: duels; 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
     if (!env.TG_BOT_TOKEN) return;
-    ctx.waitUntil(duelSweep(env).catch(() => {}));
-    if (event.cron === "0 16 * * *") ctx.waitUntil(Promise.all([postBoards(env), watchMisses(env).catch(() => {})]));
+    if (event.cron === "0 * * * *") ctx.waitUntil(duelSweep(env).catch(() => {}).then(() => duelRemind(env)).catch(() => {})); // hourly: duel expiry + reminders
+    else if (event.cron === "0 16 * * *") ctx.waitUntil(Promise.all([postBoards(env), watchMisses(env).catch(() => {})]));
     else if (event.cron === "0 4 * * *") ctx.waitUntil(Promise.all([remind(env, false), morningGroups(env)]));
-    else ctx.waitUntil(Promise.all([remind(env, true), duelNudge(env).catch(() => {})]));
+    else if (event.cron === "0 14 * * *") ctx.waitUntil(Promise.all([remind(env, true), duelNudge(env).catch(() => {})]));
   },
 };
