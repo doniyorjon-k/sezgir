@@ -198,6 +198,7 @@ async function groupBoard(env, gid, day) { // members who played `day`, best fir
   const idle = rows.results.filter(r => r.total == null);
   return { played, idle, members: rows.results.length };
 }
+const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const boardLines = played => played.map((r, i) => `${MEDALS[i] || `${i + 1}.`} ${r.name || "O'yinchi"}${r.sup ? " ⭐" : ""}, ${gradeOf(r.total)} · ${r.total}`);
 function boardText(title, day, b) {
   if (!b.played.length) return null;
@@ -273,11 +274,11 @@ async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note i
   const groups = await env.DB.prepare("SELECT chat_id FROM tg_groups WHERE active = 1").all();
   for (const g of groups.results) {
     const w = (await groupBoard(env, g.chat_id, yday)).played[0], b = await groupBoard(env, g.chat_id, day);
-    const yest = w ? `Kechagi g'olib: 🥇 ${w.name || "O'yinchi"}, ${gradeOf(w.total)} · ${w.total}` : "";
+    const yest = w ? `Kechagi g'olib: 🥇 ${esc(w.name || "O'yinchi")}, ${gradeOf(w.total)} · ${w.total}` : ""; // HTML message: names escaped, key lines bold
     const text = b.played.length // some already played after midnight: show the board so far
-      ? `☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting\n\n${boardLines(b.played.slice(0, 10)).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}${yest ? `\n${yest}` : ""}`
-      : `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?${yest ? `\n${yest}` : ""}`;
-    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
+      ? `<b>☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting</b>\n\n${boardLines(b.played.slice(0, 10)).map(esc).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n<b>${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}</b>${yest ? `\n\n${yest}` : ""}`
+      : `<b>☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?</b>${yest ? `\n\n${yest}` : ""}`;
+    const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
   }
