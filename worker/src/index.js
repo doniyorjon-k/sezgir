@@ -275,8 +275,8 @@ async function morningGroups(env) { // 09:00 Tashkent: short "new puzzle" note i
     const w = (await groupBoard(env, g.chat_id, yday)).played[0], b = await groupBoard(env, g.chat_id, day);
     const yest = w ? `Kechagi g'olib: 🥇 ${w.name || "O'yinchi"}, ${gradeOf(w.total)} · ${w.total}` : "";
     const text = b.played.length // some already played after midnight: show the board so far
-      ? `☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting\n\n${boardLines(b.played.slice(0, 10)).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}${yest ? `\n${yest}` : ""}`
-      : `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?${yest ? `\n${yest}` : ""}`;
+      ? `☀️ Sezgir #${puzzleNo(day)} · hozirgi reyting\n\n${boardLines(b.played.slice(0, 10)).join("\n")}${b.played.length > 10 ? `\n… yana ${b.played.length - 10} kishi` : ""}\n\n${b.idle.length ? `Hali o'ynamaganlar: ${b.idle.length} kishi. Kim o'zib ketadi?` : "Hamma o'ynadi!"}${yest ? `\n\n${yest}` : ""}`
+      : `☀️ Sezgir #${puzzleNo(day)} tayyor. Bugun kim birinchi bo'ladi?${yest ? `\n\n${yest}` : ""}`;
     const r = await tg(env, "sendMessage", { chat_id: g.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "🎯 O'ynash", style: "success", url: `https://t.me/${BOT_USER}?startapp` }]] } });
     if (!r.ok && (r.error_code === 403 || r.error_code === 400)) await env.DB.prepare("UPDATE tg_groups SET active = 0 WHERE chat_id = ?").bind(g.chat_id).run();
     await new Promise(res => setTimeout(res, 40));
