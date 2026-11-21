@@ -104,7 +104,7 @@ async function onMessage(env, msg) {
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
   if (cmd === "/baholar" && chat === OWNER_ID) return fbList(env, chat);
-  if (cmd === "/statistika" && chat === OWNER_ID) return statList(env, chat);
+  if (cmd === "/statistika" && chat === OWNER_ID) return tg(env, "sendMessage", { chat_id: chat, text: "📊 <b>Statistika paneli</b>", parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "📊 Panelni ochish", style: "primary", web_app: { url: `${SITE}admin.html` } }]] } }); // owner wants only the Mini App panel
   if (text && !text.startsWith("/")) { const f = await env.DB.prepare("SELECT * FROM feedback WHERE chat_id = ? AND wait > ?").bind(chat, Date.now() - FB_WAIT).first(); if (f) return fbComment(env, msg, f); }
   if (cmd === "/qollash" || (cmd === "/start" && arg === "qollash")) { const n = cmd === "/qollash" ? parseInt(arg, 10) : 0; return supportMenu(env, chat, n >= 1 && n <= 10000 ? n : 0); }
   if (cmd === "/duel" || (cmd === "/start" && arg === "duel")) return duelPicker(env, chat, chat, null);
