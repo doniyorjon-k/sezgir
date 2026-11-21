@@ -104,6 +104,7 @@ async function onMessage(env, msg) {
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
   if (cmd === "/baholar" && chat === OWNER_ID) return fbList(env, chat);
+  if (cmd === "/statistika" && chat === OWNER_ID) return statList(env, chat);
   if (text && !text.startsWith("/")) { const f = await env.DB.prepare("SELECT * FROM feedback WHERE chat_id = ? AND wait > ?").bind(chat, Date.now() - FB_WAIT).first(); if (f) return fbComment(env, msg, f); }
   if (cmd === "/qollash" || (cmd === "/start" && arg === "qollash")) { const n = cmd === "/qollash" ? parseInt(arg, 10) : 0; return supportMenu(env, chat, n >= 1 && n <= 10000 ? n : 0); }
   if (cmd === "/duel" || (cmd === "/start" && arg === "duel")) return duelPicker(env, chat, chat, null);
@@ -182,6 +183,45 @@ async function maybeAskSupport(env, client) { // once per person, after their 5t
   const claim = await env.DB.prepare("UPDATE tg_users SET asked = 1 WHERE chat_id = ? AND asked = 0").bind(u.chat_id).run(); if (!claim.meta?.changes || given) return;
   const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
   await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: askButtons(u.client, links) });
+}
+// ---------- /statistika: owner-only overview of players and plays ----------
+const TEST_NAMES = ["Anor", "Chillak", "Minora", "Ketmon", "Non"];
+const dayLabel = d => { const [, m, dd] = d.split("-").map(Number); return `${dd}-${["yan","fev","mar","apr","may","iyun","iyul","avg","sen","okt","noy","dek"][m - 1]}`; };
+async function sendChunks(env, chat, head, lines) { // Telegram caps a message at 4096 chars
+  let buf = head; for (const l of lines) { if (buf.length + l.length + 1 > 3900) { await tg(env, "sendMessage", { chat_id: chat, text: buf, parse_mode: "HTML" }); buf = ""; } buf += (buf ? "\n" : "") + l; }
+  if (buf) await tg(env, "sendMessage", { chat_id: chat, text: buf, parse_mode: "HTML" });
+}
+async function statList(env, chat) {
+  const day = tzDay(), yday = shiftDay(day, -1), q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
+  const t = await q(`SELECT (SELECT COUNT(DISTINCT client) FROM plays) AS players, (SELECT COUNT(*) FROM plays) AS plays, (SELECT ROUND(AVG(total)) FROM plays) AS avg,
+    (SELECT COUNT(*) FROM tg_users) AS bot, (SELECT COUNT(*) FROM tg_users WHERE active = 1) AS botOn,
+    (SELECT COUNT(DISTINCT p.client) FROM plays p JOIN tg_users u ON u.client = p.client) AS tgPlayers,
+    (SELECT COUNT(*) FROM tg_groups WHERE active = 1) AS groups, (SELECT COUNT(DISTINCT user_id) FROM tg_members m JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1) AS members,
+    (SELECT COUNT(*) FROM (SELECT client FROM plays GROUP BY client HAVING COUNT(*) >= 2)) AS ret2, (SELECT COUNT(*) FROM (SELECT client FROM plays GROUP BY client HAVING COUNT(*) >= 5)) AS ret5,
+    (SELECT COUNT(*) FROM duels WHERE status = 'done') AS duels, (SELECT COUNT(*) FROM duels WHERE status IN ('pending','active')) AS duelsOpen,
+    (SELECT COUNT(stars) FROM feedback) AS rated, (SELECT ROUND(AVG(stars), 1) FROM feedback) AS stars`).first();
+  const days = (await q(`SELECT d.date, d.n, d.avg, (SELECT COUNT(*) FROM visits v WHERE v.date = d.date) AS vis, (SELECT COUNT(*) FROM plays p2 WHERE p2.date = d.date AND NOT EXISTS (SELECT 1 FROM plays p3 WHERE p3.client = p2.client AND p3.date < d.date)) AS fresh
+    FROM (SELECT date, COUNT(*) AS n, ROUND(AVG(total)) AS avg FROM plays GROUP BY date ORDER BY date DESC LIMIT 7) d ORDER BY d.date DESC`).all()).results;
+  const today = (await q("SELECT scores FROM plays WHERE date = ?", day).all()).results.map(r => JSON.parse(r.scores));
+  const testAvg = today.length ? TEST_NAMES.map((n, i) => `${n} ${Math.round(today.reduce((a, s) => a + (Number(s[i]) || 0), 0) / today.length)}`).join(" · ") : "";
+  const tdy = days.find(d => d.date === day), ydy = days.find(d => d.date === yday);
+  const L = [`<b>📊 Sezgir statistikasi</b> · ${dayLabel(day)}`, "",
+    `<b>O'yinchilar: ${t.players}</b> (Telegram orqali ${t.tgPlayers} · faqat saytda ${t.players - t.tgPlayers})`,
+    `Qaytib o'ynaganlar: 2+ kun ${t.ret2} · 5+ kun ${t.ret5}`,
+    `Bot: ${t.bot} kishi, eslatma yoqilgan ${t.botOn}`,
+    `Guruhlar: ${t.groups} ta, bellashuvda ${t.members} kishi`,
+    `Jami o'yinlar: ${t.plays} · o'rtacha ball ${t.avg ?? "–"}`, "",
+    `<b>Bugun: ${tdy ? tdy.n : 0} o'yin</b>${tdy ? ` · o'rtacha ${tdy.avg} · yangi ${tdy.fresh} · saytga kirgan ${tdy.vis}` : ""}`,
+    testAvg ? `Testlar (o'rtacha): ${testAvg}` : "",
+    `Kecha: ${ydy ? `${ydy.n} o'yin · o'rtacha ${ydy.avg}` : "0 o'yin"}`, "",
+    `<b>Oxirgi kunlar</b> (o'yin · yangi · tashrif):`, ...days.map(d => `${dayLabel(d.date)}: ${d.n} · ${d.fresh} · ${d.vis}`), "",
+    `Duellar: ${t.duels} ta tugagan, ${t.duelsOpen} ta ochiq`,
+    `Baholar: ${t.rated ? `${t.stars} / 5 (${t.rated} kishi)` : "hali yo'q"} · /baholar`].filter((l, i, a) => l !== "" || a[i - 1] !== "");
+  await tg(env, "sendMessage", { chat_id: chat, text: L.join("\n"), parse_mode: "HTML" });
+  const rows = (await q(`SELECT p.client, COUNT(*) AS n, ROUND(AVG(p.total)) AS avg, MAX(p.total) AS best, MAX(p.date) AS last, MIN(p.date) AS first, u.name
+    FROM plays p LEFT JOIN tg_users u ON u.client = p.client GROUP BY p.client ORDER BY n DESC, last DESC`).all()).results;
+  await sendChunks(env, chat, `<b>👥 O'yinchilar (${rows.length})</b> · kun · o'rtacha · eng yaxshi · oxirgi`,
+    rows.map((r, i) => `${i + 1}. ${r.name ? esc(r.name) : `<i>saytdan ${r.client.slice(0, 5)}</i>`} — ${r.n} kun · ${r.avg} · ${r.best} · ${r.last === day ? "bugun" : dayLabel(r.last)}`));
 }
 // ---------- ratings: after a player's 2nd day the bot asks for 1-5 stars and an optional comment; the owner sees them in /baholar ----------
 const FB_ON = true; // owner approved 2026-11-21
@@ -371,7 +411,7 @@ async function myGroups(env, client, date) { // for the site: "guruhingizda N-o'
 async function tgSetup(env, origin) {
   const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message", "my_chat_member", "pre_checkout_query", "callback_query"], drop_pending_updates: true });
   const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "duel", description: "Do'stni duelga chaqirish ⚔️" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
-  await tg(env, "setMyCommands", { scope: { type: "chat", chat_id: OWNER_ID }, commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "duel", description: "Do'stni duelga chaqirish ⚔️" }, { command: "baholar", description: "O'yinchilar baholari va izohlari" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
+  await tg(env, "setMyCommands", { scope: { type: "chat", chat_id: OWNER_ID }, commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "duel", description: "Do'stni duelga chaqirish ⚔️" }, { command: "statistika", description: "To'liq statistika 📊" }, { command: "baholar", description: "O'yinchilar baholari va izohlari" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
   await tg(env, "setMyCommands", { scope: { type: "all_group_chats" }, commands: [{ command: "reyting", description: "Bugungi guruh reytingi" }, { command: "qatnashish", description: "Bellashuvga qo'shilish" }, { command: "duel", description: "Duelga chaqirish ⚔️" }, { command: "duelreyting", description: "Duel reytingi" }] });
   const menu = await tg(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "O'ynash", web_app: { url: SITE } } });
   const desc = await tg(env, "setMyDescription", { description: "Sezgir: har kuni 5 ta qisqa idrok testi, 2 daqiqa. Bot har kuni ertalab yangi jumboqni eslatadi va seriyangizni sanaydi." });
