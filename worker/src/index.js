@@ -187,7 +187,7 @@ async function maybeAskSupport(env, client) { // once per person, after their 5t
 const FB_ON = true; // owner approved 2026-11-21
 const FB_DAYS = 2, FB_WAIT = 48 * 36e5;
 const starsOf = n => "★".repeat(n) + "☆".repeat(5 - n);
-const FB_ASK = "<b>Sezgir sizga ma'qul keldimi?</b>\n\nO'yinni bir necha kundan beri o'ynayapsiz, rahmat! Uni <b>1 dan 5 gacha</b> yulduz bilan baholang:";
+const FB_ASK = "<b>Sezgir sizga ma'qul keldimi?</b>\n\nSezgir'ni o'ynaganingiz uchun rahmat! O'yinni <b>1 dan 5 gacha</b> yulduz bilan baholang:";
 const fbButtons = () => ({ inline_keyboard: [[1, 2, 3, 4, 5].map(n => ({ text: `${n} ⭐`, callback_data: `fb:${n}` }))] });
 async function fbAsk(env, chat, name) {
   const claim = await env.DB.prepare("INSERT OR IGNORE INTO feedback (chat_id, name, asked) VALUES (?, ?, ?)").bind(chat, name || null, Date.now()).run();
