@@ -242,9 +242,9 @@ async function statList(env, chat) {
   await sendChunks(env, chat, `<b>👥 O'yinchilar (${rows.length})</b> · kun · o'rtacha · eng yaxshi · oxirgi`,
     rows.map((r, i) => `${i + 1}. ${r.name ? esc(r.name) : `<i>saytdan ${r.client.slice(0, 5)}</i>`} — ${r.n} kun · ${r.avg} · ${r.best} · ${r.last === day ? "bugun" : dayLabel(r.last)}`));
 }
-// ---------- ratings: after a player's 2nd day the bot asks for 1-5 stars and an optional comment; the owner sees them in /baholar ----------
+// ---------- ratings: after a player's first game the bot asks for 1-5 stars and an optional comment; the owner sees them in /baholar ----------
 const FB_ON = true; // owner approved 2026-11-21
-const FB_DAYS = 2, FB_WAIT = 48 * 36e5;
+const FB_DAYS = 1, FB_WAIT = 48 * 36e5;
 const starsOf = n => "★".repeat(n) + "☆".repeat(5 - n);
 const FB_ASK = "<b>Sezgir sizga ma'qul keldimi?</b>\n\nSezgir'ni o'ynaganingiz uchun rahmat! O'yinni <b>1 dan 5 gacha</b> yulduz bilan baholang:";
 const fbButtons = () => ({ inline_keyboard: [[1, 2, 3, 4, 5].map(n => ({ text: `${n} ⭐`, callback_data: `fb:${n}` }))] });
