@@ -184,7 +184,7 @@ async function maybeAskSupport(env, client) { // once per person, after their 5t
   await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: askButtons(u.client, links) });
 }
 // ---------- ratings: after a player's 2nd day the bot asks for 1-5 stars and an optional comment; the owner sees them in /baholar ----------
-const FB_ON = false; // asking players starts after the owner approves the look
+const FB_ON = true; // owner approved 2026-11-21
 const FB_DAYS = 2, FB_WAIT = 48 * 36e5;
 const starsOf = n => "★".repeat(n) + "☆".repeat(5 - n);
 const FB_ASK = "<b>Sezgir sizga ma'qul keldimi?</b>\n\nO'yinni bir necha kundan beri o'ynayapsiz, rahmat! Uni <b>1 dan 5 gacha</b> yulduz bilan baholang:";
