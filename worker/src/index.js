@@ -259,6 +259,20 @@ async function maybeAskFeedback(env, client) { if (!FB_ON) return;
   const d = await env.DB.prepare("SELECT COUNT(DISTINCT date) AS n FROM plays WHERE client = ?").bind(client).first(); if (d.n < FB_DAYS) return;
   await fbAsk(env, u.chat_id, u.name);
 }
+const FB_SKIP = { inline_keyboard: [[{ text: "Yozadigan narsam yo'q", callback_data: "fb:skip" }]] };
+const FB_COMMENT = n => `<b>Taklif, shikoyat yoki e'tirozingiz bormi?</b>\n\n${n <= 3 ? "Nima yoqmaganini yozsangiz, tuzatishga harakat qilamiz." : "Nima yoqdi, nimani yaxshilash kerak?"} <b>Shu yerga yozib yuboring</b>, har bir fikrni muallif o'zi o'qiydi.`;
+const FB_NUDGE_AFTER = 4 * 36e5;
+async function fbRemind(env) { // one gentle reminder to players who rated but wrote nothing
+  const hr = (new Date().getUTCHours() + 5) % 24; if (hr >= 23 || hr < 9) return;
+  const now = Date.now();
+  const rows = (await env.DB.prepare("SELECT chat_id, stars FROM feedback WHERE stars IS NOT NULL AND comment IS NULL AND nudged = 0 AND wait > 0 AND wait < ? AND wait > ?").bind(now - FB_NUDGE_AFTER, now - FB_WAIT).all()).results;
+  for (const f of rows) {
+    const claim = await env.DB.prepare("UPDATE feedback SET nudged = 1, wait = ? WHERE chat_id = ? AND nudged = 0").bind(now, f.chat_id).run(); if (!claim.meta?.changes) continue;
+    await tg(env, "sendMessage", { chat_id: f.chat_id, parse_mode: "HTML", reply_markup: FB_SKIP,
+      text: `<b>Fikringizni kutyapmiz 🙂</b>\n\nSezgir'ga ${starsOf(f.stars)} baho qo'yganingiz uchun rahmat! ${f.stars <= 3 ? "Nima yoqmadi, nimani o'zgartirsak bo'ladi?" : "Nima yoqdi, nimani yaxshilash kerak?"} <b>Bir-ikki so'z bo'lsa ham shu yerga yozib yuboring</b>.` });
+    await new Promise(res => setTimeout(res, 40));
+  }
+}
 const who = f => `${esc(f.name || "O'yinchi")}${f.username ? ` (@${esc(f.username)})` : ""}`;
 async function fbRate(env, q, from, v) {
   const f = await env.DB.prepare("SELECT * FROM feedback WHERE chat_id = ?").bind(from).first();
@@ -273,9 +287,10 @@ async function fbRate(env, q, from, v) {
   const name = [q.from.first_name, q.from.last_name].filter(Boolean).join(" ").slice(0, 60) || f.name;
   await env.DB.prepare("UPDATE feedback SET stars = ?, rated = ?, wait = ?, name = ?, username = ? WHERE chat_id = ?").bind(n, Date.now(), Date.now(), name, q.from.username || null, from).run();
   await answerCb(env, q, "Rahmat! ⭐");
-  if (chat) await tg(env, "editMessageText", { chat_id: chat, message_id: mid, parse_mode: "HTML",
-    text: `<b>Bahoyingiz: ${starsOf(n)} (${n}/5)</b>\n\nRahmat! Taklif, shikoyat yoki e'tirozingiz bo'lsa, <b>shu yerga yozib yuboring</b>. Har bir fikr o'yinni yaxshilashga yordam beradi.`,
-    reply_markup: { inline_keyboard: [[{ text: "Yozadigan narsam yo'q", callback_data: "fb:skip" }]] } });
+  if (chat) { // keep the rating message short and ask for a comment in a new message, so the phone notifies the player
+    await tg(env, "editMessageText", { chat_id: chat, message_id: mid, parse_mode: "HTML", text: `<b>Bahoyingiz: ${starsOf(n)} (${n}/5)</b>\n\nRahmat! ⭐` });
+    await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", text: FB_COMMENT(n), reply_markup: FB_SKIP });
+  }
   await tg(env, "sendMessage", { chat_id: OWNER_ID, parse_mode: "HTML", text: `⭐ <b>Yangi baho:</b> ${who({ name, username: q.from.username })} · ${starsOf(n)} ${n}/5${f.stars != null && f.stars !== n ? ` (avval ${f.stars}/5)` : ""}` });
 }
 async function fbComment(env, msg, f) { // the next private text after rating
@@ -808,7 +823,7 @@ export default {
   },
   async scheduled(event, env, ctx) { // hourly: duels; 04:00 UTC = 09:00 Tashkent (morning), 14:00 UTC = 19:00 (evening), 16:00 UTC = 21:00 (group boards)
     if (!env.TG_BOT_TOKEN) return;
-    if (event.cron === "0 * * * *") ctx.waitUntil(duelSweep(env).catch(() => {}).then(() => duelRemind(env)).catch(() => {})); // hourly: duel expiry + reminders
+    if (event.cron === "0 * * * *") ctx.waitUntil(duelSweep(env).catch(() => {}).then(() => duelRemind(env)).catch(() => {}).then(() => fbRemind(env)).catch(() => {})); // hourly: duel expiry + reminders
     else if (event.cron === "0 16 * * *") ctx.waitUntil(Promise.all([postBoards(env), watchMisses(env).catch(() => {})]));
     else if (event.cron === "0 4 * * *") ctx.waitUntil(Promise.all([remind(env, false), morningGroups(env)]));
     else if (event.cron === "0 14 * * *") ctx.waitUntil(Promise.all([remind(env, true), duelNudge(env).catch(() => {})]));

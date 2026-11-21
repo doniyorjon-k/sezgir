@@ -94,5 +94,5 @@ CREATE TABLE IF NOT EXISTS duel_elo (
 -- ratings: one row per asked player; wait = time of rating while the bot waits for a comment
 CREATE TABLE IF NOT EXISTS feedback (
   chat_id INTEGER PRIMARY KEY, name TEXT, username TEXT, stars INTEGER, comment TEXT,
-  asked INTEGER NOT NULL, rated INTEGER, commented INTEGER, wait INTEGER NOT NULL DEFAULT 0
+  asked INTEGER NOT NULL, rated INTEGER, commented INTEGER, wait INTEGER NOT NULL DEFAULT 0, nudged INTEGER NOT NULL DEFAULT 0
 );
