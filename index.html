@@ -922,6 +922,35 @@ const DUEL_ID = (v => /^[a-z0-9]{10}$/.test(v || "") ? v : null)(new URLSearchPa
 function duelParams(seed) { const R = rng("duel-" + seed); return TESTS.map(t => withVariant(t, t.gen(R), `duel-${seed}-${t.id}`)); }
 function duelBody(extra) { const T = window.Telegram && window.Telegram.WebApp; return Object.assign({ id: DUEL_ID, client: clientId(), initData: T && T.initData || undefined }, extra); }
 async function duelSend(path, extra) { for (let i = 0; i < 3; i++) { const r = await api(path, duelBody(extra)); if (r) return r; await new Promise(ok => setTimeout(ok, 1200 * (i + 1))); } return null; }
+// ---------- duel result picture for the group (1080x1350, same dark style as the result card) ----------
+async function drawDuelCard(cd) {
+  try { await Promise.all([document.fonts.load("600 64px Inter"), document.fonts.load("500 40px Inter"), document.fonts.load("400 32px Inter")]); } catch {}
+  const Wc = 1080, Hc = 1350, c = document.createElement("canvas"); c.width = Wc; c.height = Hc; const x = c.getContext("2d"); const F = (w, px) => `${w} ${px}px Inter, system-ui, sans-serif`;
+  const fit = (t, w) => { let s = String(t); while (s.length > 1 && x.measureText(s).width > w) s = s.slice(0, -1); return s === String(t) ? s : s.trimEnd() + "…"; };
+  const win = cd.sa > cd.sb ? "a" : cd.sa < cd.sb ? "b" : null;
+  x.fillStyle = CARD.bg; x.fillRect(0, 0, Wc, Hc); x.textBaseline = "alphabetic";
+  x.textAlign = "left"; x.fillStyle = CARD.ink; x.font = F(600, 52); x.fillText(GAME, 90, 140);
+  x.textAlign = "right"; x.fillStyle = CARD.muted; x.font = F(500, 34); x.fillText("⚔️ DUEL", Wc - 90, 138);
+  // names over the big score, winner gets the crown
+  x.font = F(600, 46); x.textAlign = "center";
+  [["a", Wc / 4 + 20], ["b", Wc * 3 / 4 - 20]].forEach(([k, cx]) => { x.fillStyle = win === k ? CARD.ink : CARD.muted; x.fillText(fit(cd[k], 400), cx, 290); if (win === k) { x.font = F(400, 54); x.fillText("👑", cx, 220); x.font = F(600, 46); } });
+  x.fillStyle = CARD.ink; x.font = F(600, 190); x.fillText(`${cd.sa} : ${cd.sb}`, Wc / 2, 500);
+  x.fillStyle = win ? CARD.accent : CARD.ink; x.font = F(600, 46);
+  x.fillText(win ? `🏆 G'olib: ${fit(cd[win], 560)} · +${Math.abs(cd.delta)} ochko` : "Durang 🤝", Wc / 2, 600);
+  const imgs = await Promise.all(TESTS.map(t => svgImg(t.id, CARD[t.color] || CARD.muted))), top = 680, step = 100;
+  x.textAlign = "right"; x.fillStyle = CARD.muted; x.font = F(500, 28); x.fillText(fit(cd.a, 170), Wc - 300, top - 18); x.fillText(fit(cd.b, 170), Wc - 120, top - 18);
+  TESTS.forEach((t, i) => { const y = top + i * step, A = cd.as[i] ?? 0, B = cd.bs[i] ?? 0;
+    x.fillStyle = CARD.surface; roundRect(x, 90, y, Wc - 180, 84, 20); x.fill();
+    if (imgs[i]) x.drawImage(imgs[i], 118, y + 20, 44, 44);
+    x.textAlign = "left"; x.fillStyle = CARD.ink; x.font = F(500, 32); x.fillText(t.name, 186, y + 53);
+    x.textAlign = "right"; x.font = F(600, 36);
+    x.fillStyle = A > B ? CARD.accent : CARD.ink; x.fillText(String(A), Wc - 300, y + 55);
+    x.fillStyle = B > A ? CARD.accent : CARD.ink; x.fillText(String(B), Wc - 120, y + 55); });
+  x.textAlign = "center"; x.fillStyle = CARD.muted; x.font = F(400, 30);
+  x.fillText(`Duel ochkolari: ${fit(cd.a, 260)} ${cd.ea} · ${fit(cd.b, 260)} ${cd.eb}`, Wc / 2, 1225);
+  x.fillStyle = CARD.accent; x.font = F(500, 36); x.fillText("sezgir.github.io", Wc / 2, 1290);
+  return c; }
+async function sendDuelCard(cd) { try { const c = await drawDuelCard(cd); const png = c.toDataURL("image/png").split(",")[1]; await duelSend("/duel/card", { png }); } catch {} }
 async function duelPage() {
   showStage(false); progress.hidden = true; setMeta(todayNo, today);
   const c = el("section", "card"); const h = el("h2", null, "Yuklanmoqda…"); c.append(backLink("Bosh sahifa", home), el("div", "step", "⚔️ Duel"), h); show(c); window.scrollTo(0, 0);
@@ -935,6 +964,7 @@ function renderDuel(c, h, st) {
   h.textContent = `Siz va ${st.opp}`;
   const me = st.me;
   if (st.status === "done") {
+    if (st.card) sendDuelCard(st.card); // the group post waits a few seconds for this picture
     const v = el("div", "duel-vs"); v.append(`${me.score ?? 0} : ${st.oppScore}`); v.append(el("small", null, `siz · ${st.opp}`));
     const win = (me.score ?? 0) > st.oppScore, draw = (me.score ?? 0) === st.oppScore;
     const vd = el("div", "duel-verdict" + (win ? " win" : ""), draw ? "Durang 🤝" : win ? `G'alaba! +${Math.abs(st.delta)} ochko 🏆` : `Bu safar ${st.opp} yutdi. −${Math.abs(st.delta)} ochko`);
