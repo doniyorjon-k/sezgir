@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14171d">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>Sezgir panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("sezgir:theme") === "light" ? "light" : "dark"; } catch { document.documentElement.dataset.theme = "dark"; }</script>
+<style>
+/* Owner-only dashboard. The page is public, the data is not: /admin/stats answers only the owner's fresh Telegram session. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #1d2433; --muted: #6b7385; --line: #e4e7ec;
+  --accent: #4f7f86; --accent-soft: #e6eff0; --gold: #a9874f; --rest: #b9c0cc;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #14171d; --surface: #1b1f27; --ink: #e6e8ec; --muted: #9aa1ae; --line: #2a303b; --accent: #7fb0b6; --accent-soft: #22323a; --gold: #d2ae74; --rest: #4a5262; } }
+:root[data-theme="dark"] {
+  --bg: #14171d; --surface: #1b1f27; --ink: #e6e8ec; --muted: #9aa1ae; --line: #2a303b; --accent: #7fb0b6; --accent-soft: #22323a; --gold: #d2ae74; --rest: #4a5262; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+h1 span { color: var(--accent); }
+.meta { color: var(--muted); font-size: 13px; }
+h2 { font-size: 15px; font-weight: 600; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.kpi b { display: block; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.kpi small { color: var(--muted); font-size: 12.5px; line-height: 1.35; display: block; }
+svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+svg.chart text { font: 500 20px var(--font); fill: var(--muted); }
+svg.chart .bar { cursor: pointer; }
+svg.chart .hit:hover + .bar, svg.chart .sel { opacity: .75; }
+.tip { min-height: 20px; font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tip:empty::before { content: "Ustunga bosing: aniq son chiqadi"; color: var(--muted); }
+.legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.hbar { display: grid; grid-template-columns: 70px 1fr 34px; gap: 10px; align-items: center; font-size: 13.5px; }
+.hbar .track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+.hbar .track i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+.hbar b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.tools input, .tools select { font: 14px var(--font); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-width: 0; }
+.tools input { flex: 1 1 180px; }
+.list { display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row .nm { font-weight: 600; overflow-wrap: anywhere; }
+.row .nm em { font-style: normal; font-weight: 500; font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+.row .det { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.row .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.row .num b { color: var(--ink); font-size: 15px; }
+.quote { color: var(--ink); font-size: 13.5px; white-space: pre-wrap; grid-column: 1 / -1; }
+.empty, .gate { color: var(--muted); }
+.gate { text-align: center; padding: 60px 16px; }
+.btn { font: 500 14px var(--font); border-radius: 10px; padding: 9px 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 620px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main id="app"><p class="gate">Yuklanmoqda…</p></main>
+<script>
+(() => {
+const API = "https://sezgir-api.sezgir-uz.workers.dev";
+const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
+const $app = document.getElementById("app");
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const dl = d => { const [, m, dd] = d.split("-").map(Number); return `${dd}-${MONTHS[m - 1]}`; };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const T = window.Telegram && window.Telegram.WebApp; if (T) { try { T.ready(); T.expand(); } catch {} }
+
+function gate(msg) { $app.replaceChildren(el("p", "gate", msg)); }
+
+// vertical bars; series = [{key, label, color}] stacked bottom-up; tap a bar to read its numbers
+function bars(rows, series, label, tipOf, opts = {}) {
+  const W = 640, H = opts.h || 200, padB = 34, padT = 8, n = rows.length, gap = n > 20 ? 2 : 4, bw = Math.max(2, (W - gap * (n - 1)) / n);
+  const max = Math.max(1, ...rows.map(r => series.reduce((a, s) => a + (r[s.key] || 0), 0)));
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "chart"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", opts.aria || "");
+  const mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  svg.append(mk("line", { x1: 0, x2: W, y1: H - padB + .5, y2: H - padB + .5, stroke: css("--line") }));
+  const tip = el("div", "tip"); let sel = null;
+  rows.forEach((r, i) => { const x = i * (bw + gap); let y = H - padB; const g = mk("g", {});
+    series.forEach((s, k) => { const v = r[s.key] || 0; if (!v) return; const h = Math.max(2, (H - padB - padT) * v / max); y -= h; const top = k === series.length - 1 || series.slice(k + 1).every(t => !(r[t.key] || 0));
+      g.append(mk("rect", { x, y: y + (k ? 0 : 0), width: bw, height: Math.max(1, h - (k ? 2 : 0)), rx: top ? Math.min(4, bw / 2) : 0, fill: s.color, class: "bar" })); });
+    const hit = mk("rect", { x: x - gap / 2, y: 0, width: bw + gap, height: H, fill: "transparent", class: "hit", style: "cursor:pointer" });
+    hit.addEventListener("click", () => { if (sel) sel.classList.remove("sel"); sel = g; g.classList.add("sel"); tip.textContent = tipOf(r); });
+    svg.append(g, hit);
+    if (label(r, i)) { const t = mk("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle" }); t.textContent = label(r, i); svg.append(t); } });
+  const wrap = el("div"); wrap.append(svg, tip);
+  if (series.length > 1) { const lg = el("div", "legend"); series.forEach(s => { const sp = el("span"); const i = el("i"); i.style.background = s.color; sp.append(i, s.label); lg.append(sp); }); wrap.prepend(lg); }
+  return wrap;
+}
+function card(title, sub, ...kids) { const c = el("section", "card"); const h = el("div"); h.append(el("h2", null, title)); if (sub) h.append(el("p", "sub", sub)); c.append(h, ...kids); return c; }
+
+function render(d) {
+  const t = d.totals, today = d.days.find(x => x.date === d.day) || { n: 0, fresh: 0, vis: 0, avg: "–" };
+  const head = el("header"); const h1 = el("h1"); h1.innerHTML = "Sez<span>gir</span> · panel"; const rf = el("button", "btn", "Yangilash"); rf.onclick = load;
+  const right = el("div"); right.style.cssText = "display:flex;gap:10px;align-items:center"; right.append(el("span", "meta", dl(d.day)), rf); head.append(h1, right);
+
+  const kp = el("div", "kpis");
+  [[t.players, "o'yinchi jami", `Telegram ${t.tgPlayers} · sayt ${t.players - t.tgPlayers}`], [today.n, "bugun o'ynadi", `yangi ${today.fresh} · kirgan ${today.vis}`],
+   [t.ret2, "2+ kun o'ynagan", `5+ kun: ${t.ret5}`], [t.botOn, "eslatma yoqilgan", `botda jami ${t.bot}`], [t.groups, "faol guruh", ""], [t.plays, "jami o'yin", `o'rtacha ball ${t.avg ?? "–"}`],
+   [t.duels, "tugagan duel", ""], [t.rated ? `${t.stars}★` : "–", "o'rtacha baho", t.rated ? `${t.rated} kishi baholadi` : "hali yo'q"]]
+    .forEach(([v, k, s]) => { const b = el("div", "kpi"); b.append(el("b", null, String(v)), el("small", null, k)); if (s) b.append(el("small", null, s)); kp.append(b); });
+
+  const daysChart = bars(d.days.map(x => ({ ...x, back: x.n - x.fresh })), [{ key: "back", label: "qaytib kelgan", color: css("--accent") }, { key: "fresh", label: "yangi o'yinchi", color: css("--gold") }],
+    (r, i) => (i === d.days.length - 1 || i % Math.ceil(d.days.length / 6) === 0) ? dl(r.date) : "", r => `${dl(r.date)}: ${r.n} o'yin (yangi ${r.fresh}) · saytga kirgan ${r.vis} · o'rtacha ${r.avg} · duel ${r.duels}`, { aria: "Kunlik o'yinlar" });
+  const visChart = bars(d.days, [{ key: "vis", label: "kirgan", color: css("--accent") }], (r, i) => (i === d.days.length - 1 || i % Math.ceil(d.days.length / 6) === 0) ? dl(r.date) : "", r => `${dl(r.date)}: ${r.vis} kishi saytga kirdi, ${r.n} tasi o'ynadi (${r.vis ? Math.round(r.n / r.vis * 100) : 0}%)`, { h: 160, aria: "Kunlik tashriflar" });
+  const hourChart = bars(d.hours.map((n, h) => ({ h, n })), [{ key: "n", label: "", color: css("--accent") }], r => r.h % 3 === 0 ? String(r.h).padStart(2, "0") : "", r => `${String(r.h).padStart(2, "0")}:00–${String(r.h).padStart(2, "0")}:59 — ${r.n} o'yin`, { h: 160, aria: "Soatlar bo'yicha" });
+  const histChart = bars(d.hist.map((n, i) => ({ i, n })), [{ key: "n", label: "", color: css("--accent") }], r => `${r.i * 10}`, r => `${r.i * 10}–${r.i === 9 ? 100 : r.i * 10 + 9} ball: ${r.n} o'yin`, { h: 160, aria: "Ballar taqsimoti" });
+
+  // per-test averages over the last 7 puzzle days
+  const last7 = d.testDays.slice(-7), tavg = d.tests.map((_, i) => last7.length ? Math.round(last7.reduce((a, x) => a + x.avg[i], 0) / last7.length) : 0);
+  const tbox = el("div"); tbox.style.cssText = "display:flex;flex-direction:column;gap:9px";
+  d.tests.forEach((n, i) => { const r = el("div", "hbar"); const tr = el("div", "track"); const f = el("i"); f.style.width = tavg[i] + "%"; tr.append(f); r.append(el("span", null, n), tr, el("b", null, String(tavg[i]))); tbox.append(r); });
+
+  // players
+  const tools = el("div", "tools"); const q = el("input"); q.placeholder = "Ism bo'yicha qidirish"; q.type = "search";
+  const sort = el("select"); [["n", "Ko'p o'ynagan"], ["last", "Oxirgi o'ynagan"], ["avg", "O'rtacha ball"], ["best", "Eng yaxshi ball"], ["first", "Yangi qo'shilgan"]].forEach(([v, l]) => { const o = el("option", null, l); o.value = v; sort.append(o); });
+  tools.append(q, sort); const list = el("div", "list");
+  const paint = () => { const s = q.value.trim().toLowerCase(), k = sort.value;
+    const rows = d.players.filter(p => !s || (p.name || "").toLowerCase().includes(s) || (p.groups || "").toLowerCase().includes(s))
+      .sort((a, b) => k === "last" || k === "first" ? String(b[k]).localeCompare(String(a[k])) : (b[k] - a[k]) || String(b.last).localeCompare(String(a.last)));
+    list.replaceChildren(...rows.map(p => { const r = el("div", "row"); const nm = el("div", "nm", p.name || `Saytdan · ${p.client}`); if (p.today != null) nm.append(el("em", null, `bugun ${p.today}`));
+      const num = el("div", "num"); num.append(el("b", null, `${p.n} kun`), document.createTextNode(` · o'rt. ${p.avg} · eng ${p.best}`));
+      const det = [p.first === p.last ? `${dl(p.first)}` : `${dl(p.first)} → ${dl(p.last)}`, p.groups || (p.name ? "guruhsiz" : "Telegramsiz"), p.elo ? `duel ${p.elo}` : "", p.stars ? `${p.stars}★` : "", p.name && !p.active ? "eslatma o'chiq" : ""].filter(Boolean).join(" · ");
+      r.append(nm, num, el("div", "det", det)); return r; }));
+    if (!rows.length) list.append(el("p", "empty", "Hech kim topilmadi.")); };
+  q.oninput = paint; sort.onchange = paint; paint();
+
+  const grp = el("div", "list"); d.groups.forEach(g => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, `${g.today}/${g.members}`), document.createTextNode(" bugun")); r.append(el("div", "nm", g.title || "Guruh"), num); grp.append(r); });
+  if (!d.groups.length) grp.append(el("p", "empty", "Faol guruh yo'q."));
+  const STATUS = { done: "tugagan", pending: "javob kutilmoqda", active: "o'ynalmoqda", expired: "muddati o'tgan", declined: "rad etilgan" };
+  const du = el("div", "list"); d.duels.forEach(x => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, x.status === "done" ? `${x.a_score} : ${x.b_score}` : STATUS[x.status] || x.status));
+    r.append(el("div", "nm", `${x.a || "?"} ⚔️ ${x.b || "?"}`), num, el("div", "det", [dl(x.day), x.grp, x.status === "done" && x.delta ? `±${Math.abs(x.delta)} ochko` : ""].filter(Boolean).join(" · "))); du.append(r); });
+  if (!d.duels.length) du.append(el("p", "empty", "Hali duel yo'q."));
+  const fb = el("div", "list"); d.feedback.forEach(f => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, "★".repeat(f.stars) + "☆".repeat(5 - f.stars)));
+    const tm = new Date(f.t + 5 * 36e5); r.append(el("div", "nm", `${f.name || "O'yinchi"}${f.username ? " · @" + f.username : ""}`), num, el("div", "det", `${tm.getUTCDate()}-${MONTHS[tm.getUTCMonth()]} ${String(tm.getUTCHours()).padStart(2, "0")}:${String(tm.getUTCMinutes()).padStart(2, "0")}`));
+    if (f.comment) r.append(el("div", "quote", f.comment)); fb.append(r); });
+  if (!d.feedback.length) fb.append(el("p", "empty", "Hali baho yo'q."));
+
+  const two1 = el("div", "two"); two1.append(card("Qaysi soatda o'ynashadi", "oxirgi 30 kun, Toshkent vaqti", hourChart), card("Ballar taqsimoti", "oxirgi 30 kun", histChart));
+  $app.replaceChildren(head, kp,
+    card("Kunlik o'yinlar", "oxirgi 30 kun: qaytib kelganlar va yangi o'yinchilar", daysChart),
+    card("Saytga kirganlar", "kunlik tashrif; bosilsa o'ynaganlar ulushi chiqadi", visChart),
+    two1,
+    card("Testlar bo'yicha o'rtacha ball", "oxirgi 7 kun", tbox),
+    card(`O'yinchilar (${d.players.length})`, "ism, necha kun o'ynagani, o'rtacha va eng yaxshi ball, guruhi", tools, list),
+    card("Guruhlar", "bugun o'ynaganlar / bellashuvdagilar", grp),
+    card("Oxirgi duellar", null, du),
+    card("Baholar va izohlar", null, fb));
+}
+
+async function load() {
+  if (!T || !T.initData) { gate("Bu panel faqat Telegram ichida, Sezgir muallifi uchun ochiladi."); return; }
+  try { const r = await fetch(API + "/admin/stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: T.initData }) });
+    if (r.status === 403) { gate("Bu panel faqat Sezgir muallifi uchun."); return; }
+    if (!r.ok) throw 0; render(await r.json()); }
+  catch { gate("Ma'lumot yuklanmadi. Internetni tekshirib, qayta oching."); }
+}
+load();
+})();
+</script>
+</body>
+</html>
