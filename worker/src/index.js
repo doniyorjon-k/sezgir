@@ -408,11 +408,12 @@ async function duelState(env, d, me) {
   const opp = await duelUser(env, d[other]);
   const out = { id: d.id, status: d.status, side, opp: nm(opp), me: { started: !!d[side + "_start"], done: d[side + "_score"] != null, score: d[side + "_score"] } };
   if (out.me.done) out.me.scores = JSON.parse(d[side + "_scores"] || "[]");
-  if (d.status === "done") { out.oppScore = d[other + "_score"] ?? 0; out.oppScores = JSON.parse(d[other + "_scores"] || "[]"); out.delta = side === "a" ? d.delta : -d.delta; out.elo = await eloOf(env, me); }
+  if (d.status === "done") { out.oppScore = d[other + "_score"] ?? 0; out.oppScores = JSON.parse(d[other + "_scores"] || "[]"); out.delta = side === "a" ? d.delta : -d.delta; out.elo = await eloOf(env, me);
+    if (d.card === 0) { const A = await duelUser(env, d.a), B = await duelUser(env, d.b); out.card = { a: nm(A), b: nm(B), sa: d.a_score ?? 0, sb: d.b_score ?? 0, as: JSON.parse(d.a_scores || "[]"), bs: JSON.parse(d.b_scores || "[]"), delta: d.delta, ea: await eloOf(env, d.a), eb: await eloOf(env, d.b) }; } }
   else out.oppDone = d[other + "_score"] != null;
   return out;
 }
-async function duelApi(env, path, b) {
+async function duelApi(env, path, b, ctx) {
   const me = await duelWho(env, b); if (!me) return { error: "Duel faqat Telegram orqali ochiladi. Botdagi «Duelni boshlash» tugmasini bosing." };
   let d = await env.DB.prepare("SELECT * FROM duels WHERE id = ?").bind(String(b.id || "")).first();
   if (!d || (d.a !== me && d.b !== me)) return { error: "Bu duel topilmadi." };
@@ -424,6 +425,13 @@ async function duelApi(env, path, b) {
     await env.DB.prepare(`UPDATE duels SET ${side}_start = ? WHERE id = ? AND ${side}_start IS NULL`).bind(Date.now(), d.id).run();
     return { seed: d.seed };
   }
+  if (path === "/duel/card") { // PNG of the result, drawn in the app; accepted once, only while the group post is still waiting
+    if (d.status !== "done" || d.card !== 0) return { ok: false };
+    let bytes; try { bytes = Uint8Array.from(atob(String(b.png || "")), ch => ch.charCodeAt(0)); } catch { return { error: "bad image" }; }
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length < 1000 || bytes.length > 900000 || sig.some((v, i) => bytes[i] !== v)) return { error: "bad image" };
+    return { ok: await duelPostGroup(env, d, bytes) };
+  }
   if (path === "/duel/submit") {
     const scores = Array.isArray(b.scores) ? b.scores.map(Number) : [];
     if (scores.length !== 5 || scores.some(s => !Number.isInteger(s) || s < 0 || s > 100)) return { error: "bad scores" };
@@ -431,16 +439,34 @@ async function duelApi(env, path, b) {
       const total = Math.round(scores.reduce((x, s) => x + s, 0) / 5);
       await env.DB.prepare(`UPDATE duels SET ${side}_score = ?, ${side}_scores = ? WHERE id = ? AND ${side}_score IS NULL`).bind(total, JSON.stringify(scores), d.id).run();
       d = await env.DB.prepare("SELECT * FROM duels WHERE id = ?").bind(d.id).first();
-      if (d.a_score != null && d.b_score != null) d = await duelSettle(env, d);
+      if (d.a_score != null && d.b_score != null) d = await duelSettle(env, d, ctx);
     }
   }
   return { state: await duelState(env, d, me) };
 }
-async function duelSettle(env, d) { // both played (or time ran out): Elo, then tell both and the group
+// group post for a settled duel; `card` = PNG bytes drawn by the finishing player's app (sent as a photo), else plain text
+async function duelGroupText(env, d) {
+  const A = await duelUser(env, d.a), B = await duelUser(env, d.b), sa = d.a_score ?? 0, sb = d.b_score ?? 0;
+  return `<b>⚔️ Duel natijasi</b>\n\n${esc(nm(A))} ${sa} : ${sb} ${esc(nm(B))}` + (sa === sb ? "\n\n<b>Durang! 🤝</b>" : `\n\n<b>🏆 G'olib: ${esc(nm(sa > sb ? A : B))} (+${Math.abs(d.delta)} ochko)</b>`);
+}
+async function duelPostGroup(env, d, card) {
+  const claim = await env.DB.prepare("UPDATE duels SET card = 1 WHERE id = ? AND card = 0").bind(d.id).run(); // exactly one group post per duel
+  if (!claim.meta?.changes) return false;
+  const text = await duelGroupText(env, d);
+  if (card) {
+    const f = new FormData(); f.append("chat_id", String(d.gid)); f.append("caption", text); f.append("parse_mode", "HTML"); f.append("photo", new Blob([card], { type: "image/png" }), "duel.png");
+    const r = await fetch(`${env.TG_API || "https://api.telegram.org"}/bot${env.TG_BOT_TOKEN}/sendPhoto`, { method: "POST", body: f }).then(x => x.json()).catch(() => ({ ok: false }));
+    if (r.ok) return true;
+  }
+  await tg(env, "sendMessage", { chat_id: d.gid, text, parse_mode: "HTML" });
+  return true;
+}
+const CARD_WAIT = 25000; // how long the group post waits for the finishing player's picture before falling back to text
+async function duelSettle(env, d, ctx) { // both played (or time ran out): Elo, then tell both and the group
   const sa = d.a_score ?? 0, sb = d.b_score ?? 0;
   const ra = await eloOf(env, d.a), rb = await eloOf(env, d.b), ea = 1 / (1 + 10 ** ((rb - ra) / 400));
   const res = sa > sb ? 1 : sa < sb ? 0 : 0.5, delta = Math.round(ELO_K * (res - ea));
-  const upd = await env.DB.prepare("UPDATE duels SET status = 'done', delta = ?, a_score = ?, b_score = ? WHERE id = ? AND status = 'active'").bind(delta, sa, sb, d.id).run();
+  const upd = await env.DB.prepare("UPDATE duels SET status = 'done', delta = ?, a_score = ?, b_score = ?, card = 0 WHERE id = ? AND status = 'active'").bind(delta, sa, sb, d.id).run();
   if (!upd.meta?.changes) return env.DB.prepare("SELECT * FROM duels WHERE id = ?").bind(d.id).first();
   const up = (chat, dd, w) => env.DB.prepare("INSERT INTO duel_elo (chat_id, elo, w, l, d) VALUES (?, ?, ?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET elo = elo + ?, w = w + excluded.w, l = l + excluded.l, d = d + excluded.d").bind(chat, 1000 + dd, w === 1 ? 1 : 0, w === 0 ? 1 : 0, w === .5 ? 1 : 0, dd).run();
   await up(d.a, delta, res); await up(d.b, -delta, 1 - res);
@@ -448,7 +474,9 @@ async function duelSettle(env, d) { // both played (or time ran out): Elo, then 
   const head = `<b>⚔️ Duel natijasi</b>\n\n${esc(nm(A))} ${sa} : ${sb} ${esc(nm(B))}`;
   const tail = res === .5 ? "\n\n<b>Durang! 🤝</b>" : `\n\n<b>🏆 G'olib: ${esc(nm(res === 1 ? A : B))} (+${Math.abs(delta)} ochko)</b>`;
   const msg = { text: head + tail, parse_mode: "HTML" };
-  await tg(env, "sendMessage", { chat_id: d.gid, ...msg });
+  const done = { ...d, status: "done", delta, a_score: sa, b_score: sb };
+  if (ctx) ctx.waitUntil(new Promise(ok => setTimeout(ok, CARD_WAIT)).then(() => duelPostGroup(env, done)).catch(() => {})); // the app sends a picture meanwhile
+  else await duelPostGroup(env, done);
   for (const c of [d.a, d.b]) await tg(env, "sendMessage", { chat_id: c, ...msg, text: msg.text + "\n\nYana duel: /duel" });
   return env.DB.prepare("SELECT * FROM duels WHERE id = ?").bind(d.id).first();
 }
@@ -647,9 +675,9 @@ export default {
         const out = await stats(env, b.date, total, fresh ? [total, scores] : null);
         return json(client !== b.client ? { ...out, client } : out, 200, h);
       }
-      if ((url.pathname === "/duel/info" || url.pathname === "/duel/start" || url.pathname === "/duel/submit") && req.method === "POST") {
+      if (["/duel/info", "/duel/start", "/duel/submit", "/duel/card"].includes(url.pathname) && req.method === "POST") {
         const b = await req.json().catch(() => null); if (!b) return json({ error: "bad body" }, 400, h);
-        return json(await duelApi(env, url.pathname, b), 200, h);
+        return json(await duelApi(env, url.pathname, b, ctx), 200, h);
       }
       if (url.pathname === "/myplay" && req.method === "GET") { // lets a second device (or a fresh Telegram webview) show today's result instead of a new game
         const client = url.searchParams.get("client") || "", date = url.searchParams.get("date") || "";
