@@ -190,31 +190,18 @@ async function adminStats(env, initData) {
   const fresh = Number(new URLSearchParams(initData || "").get("auth_date") || 0) > Date.now() / 1000 - 86400;
   if (!u || u.id !== OWNER_ID || !fresh) return null;
   const all = async (sql, ...a) => (await env.DB.prepare(sql).bind(...a).all()).results;
-  const day = tzDay(), from = shiftDay(day, -29);
-  const [totals] = await all(`SELECT (SELECT COUNT(DISTINCT client) FROM plays) AS players, (SELECT COUNT(*) FROM plays) AS plays, (SELECT ROUND(AVG(total)) FROM plays) AS avg,
-    (SELECT COUNT(*) FROM tg_users) AS bot, (SELECT COUNT(*) FROM tg_users WHERE active = 1) AS botOn, (SELECT COUNT(DISTINCT p.client) FROM plays p JOIN tg_users u ON u.client = p.client) AS tgPlayers,
-    (SELECT COUNT(*) FROM tg_groups WHERE active = 1) AS groups, (SELECT COUNT(*) FROM (SELECT client FROM plays GROUP BY client HAVING COUNT(*) >= 2)) AS ret2,
-    (SELECT COUNT(*) FROM (SELECT client FROM plays GROUP BY client HAVING COUNT(*) >= 5)) AS ret5, (SELECT COUNT(*) FROM duels WHERE status = 'done') AS duels,
-    (SELECT COUNT(stars) FROM feedback) AS rated, (SELECT ROUND(AVG(stars), 1) FROM feedback) AS stars`);
-  const days = await all(`SELECT d.date, d.n, d.avg, (SELECT COUNT(*) FROM visits v WHERE v.date = d.date) AS vis,
-    (SELECT COUNT(*) FROM plays p2 WHERE p2.date = d.date AND NOT EXISTS (SELECT 1 FROM plays p3 WHERE p3.client = p2.client AND p3.date < d.date)) AS fresh,
-    (SELECT COUNT(*) FROM duels du WHERE du.day = d.date) AS duels
-    FROM (SELECT date, COUNT(*) AS n, ROUND(AVG(total)) AS avg FROM plays WHERE date >= ? GROUP BY date) d ORDER BY d.date`, from);
-  const raw = await all("SELECT date, total, scores, created FROM plays WHERE date >= ?", from);
-  const hours = Array(24).fill(0), hist = Array(10).fill(0), tests = {};
-  for (const r of raw) { hours[new Date(r.created + 5 * 36e5).getUTCHours()]++; hist[Math.min(9, Math.floor(r.total / 10))]++; const sc = JSON.parse(r.scores); (tests[r.date] ||= { n: 0, s: [0, 0, 0, 0, 0] }).n++; sc.forEach((x, i) => tests[r.date].s[i] += Number(x) || 0); }
-  const testDays = Object.keys(tests).sort().map(d => ({ date: d, avg: tests[d].s.map(x => Math.round(x / tests[d].n)) }));
-  const players = await all(`SELECT p.client, COUNT(*) AS n, ROUND(AVG(p.total)) AS avg, MAX(p.total) AS best, MAX(p.date) AS last, MIN(p.date) AS first, u.chat_id, u.name, u.active,
-    (SELECT total FROM plays t WHERE t.client = p.client AND t.date = ?) AS today, e.elo, f.stars,
-    (SELECT GROUP_CONCAT(g.title, ' · ') FROM tg_members m JOIN tg_groups g ON g.chat_id = m.group_id AND g.active = 1 WHERE m.user_id = u.chat_id) AS groups
-    FROM plays p LEFT JOIN tg_users u ON u.client = p.client LEFT JOIN duel_elo e ON e.chat_id = u.chat_id LEFT JOIN feedback f ON f.chat_id = u.chat_id
-    GROUP BY p.client ORDER BY n DESC, last DESC`, day);
-  const groups = await all(`SELECT g.chat_id, g.title, (SELECT COUNT(*) FROM tg_members m WHERE m.group_id = g.chat_id) AS members,
-    (SELECT COUNT(*) FROM tg_members m JOIN tg_users u ON u.chat_id = m.user_id JOIN plays p ON p.client = u.client AND p.date = ? WHERE m.group_id = g.chat_id) AS today
-    FROM tg_groups g WHERE g.active = 1 ORDER BY members DESC`, day);
-  const duels = await all(`SELECT d.day, d.status, d.a_score, d.b_score, d.delta, ua.name AS a, ub.name AS b, g.title AS grp FROM duels d LEFT JOIN tg_users ua ON ua.chat_id = d.a LEFT JOIN tg_users ub ON ub.chat_id = d.b LEFT JOIN tg_groups g ON g.chat_id = d.gid ORDER BY d.created DESC LIMIT 25`);
-  const feedback = await all("SELECT name, username, stars, comment, COALESCE(commented, rated) AS t FROM feedback WHERE stars IS NOT NULL ORDER BY t DESC LIMIT 50");
-  return { day, totals, days, hours, hist, testDays, tests: TEST_NAMES, players: players.map(p => ({ ...p, client: p.chat_id ? undefined : p.client.slice(0, 5), chat_id: undefined })), groups: groups.map(g => ({ ...g, chat_id: undefined })), duels, feedback };
+  // raw tables; the panel builds every view (players, days, groups, duels) itself
+  const [users, plays, groups, members, duels, elo, feedback, visits] = await Promise.all([
+    all("SELECT chat_id, client, name, active, created FROM tg_users"),
+    all("SELECT date, client, total, scores, created FROM plays ORDER BY date"),
+    all("SELECT chat_id, title, active, created FROM tg_groups"),
+    all("SELECT group_id, user_id, joined FROM tg_members"),
+    all("SELECT id, gid, a, b, status, day, created, accepted, a_start, b_start, a_score, b_score, a_scores, b_scores, delta FROM duels ORDER BY created DESC"),
+    all("SELECT chat_id, elo, w, l, d FROM duel_elo"),
+    all("SELECT chat_id, name, username, stars, comment, asked, rated, commented FROM feedback"),
+    all("SELECT date, COUNT(*) AS n FROM visits GROUP BY date"),
+  ]);
+  return { day: tzDay(), now: Date.now(), tests: TEST_NAMES, users, plays, groups, members, duels, elo, feedback, visits };
 }
 // ---------- /statistika: owner-only overview of players and plays ----------
 const TEST_NAMES = ["Anor", "Chillak", "Minora", "Ketmon", "Non"];

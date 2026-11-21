@@ -66,6 +66,29 @@ svg.chart .hit:hover + .bar, svg.chart .sel { opacity: .75; }
 .btn { font: 500 14px var(--font); border-radius: 10px; padding: 9px 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 620px) { .two { grid-template-columns: 1fr; } }
+.crumbs { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.back { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 6px 13px 6px 10px; border-radius: 999px; color: var(--ink); font: 500 14px var(--font); cursor: pointer; text-decoration: none; white-space: nowrap; }
+a.row, .row.link { color: inherit; text-decoration: none; cursor: pointer; }
+a.row:hover .nm, .row.link:hover .nm { color: var(--accent); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { font: 500 13px var(--font); border: 1px solid var(--line); background: var(--bg); color: var(--muted); padding: 6px 12px; border-radius: 999px; cursor: pointer; text-decoration: none; }
+.tab.on { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.tab b { font-weight: 600; margin-left: 4px; }
+.res { display: flex; flex-direction: column; }
+.res:empty { display: none; }
+.grid { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.grid th { text-align: right; color: var(--muted); font-weight: 500; padding: 6px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.grid td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+.grid th:first-child, .grid td:first-child { text-align: left; }
+.grid td b { font-weight: 600; }
+.grid tr.link { cursor: pointer; } .grid tr.link:hover td:first-child { color: var(--accent); }
+.scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 500; border-radius: 999px; padding: 1px 8px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.pill.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.tip a { color: var(--accent); font-weight: 500; margin-left: 8px; }
+.duo { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 6px; grid-column: 1 / -1; }
+.duo span { color: var(--muted); } .duo b { text-align: right; font-weight: 600; } .duo b.w { color: var(--accent); }
+h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -77,97 +100,209 @@ const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen",
 const $app = document.getElementById("app");
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const dl = d => { const [, m, dd] = d.split("-").map(Number); return `${dd}-${MONTHS[m - 1]}`; };
+const tm = t => { if (!t) return "–"; const d = new Date(t + 5 * 36e5); return `${d.getUTCDate()}-${MONTHS[d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; };
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : 0;
 const T = window.Telegram && window.Telegram.WebApp; if (T) { try { T.ready(); T.expand(); } catch {} }
+let D = null; // indexed data
 
 function gate(msg) { $app.replaceChildren(el("p", "gate", msg)); }
+// test names changed over time: Atlas -> Minora (19-noy), Doira -> Ketmon (21-noy)
+const testName = (i, date) => i === 2 && date < "2026-11-19" ? "Atlas" : i === 3 && date < "2026-11-21" ? "Doira" : D.tests[i];
 
-// vertical bars; series = [{key, label, color}] stacked bottom-up; tap a bar to read its numbers
+function index(r) {
+  const users = new Map(r.users.map(u => [u.chat_id, u])), byClient = new Map(r.users.filter(u => u.client).map(u => [u.client, u]));
+  const groups = new Map(r.groups.map(g => [g.chat_id, { ...g, members: [] }])), elo = new Map(r.elo.map(e => [e.chat_id, e])), fb = new Map(r.feedback.map(f => [f.chat_id, f]));
+  const players = new Map(); // key: chat_id for Telegram users, "c:"+client for site-only players
+  const P = key => players.get(key) || (players.set(key, { key, plays: [], groups: [], duels: [] }), players.get(key));
+  for (const u of r.users) { const p = P(String(u.chat_id)); p.user = u; p.name = u.name || "O'yinchi"; }
+  for (const x of r.plays) { x.scores = JSON.parse(x.scores); const u = byClient.get(x.client); const p = P(u ? String(u.chat_id) : "c:" + x.client); if (!p.user) p.name = `Saytdan · ${x.client.slice(0, 5)}`; p.plays.push(x); x.p = p; }
+  for (const m of r.members) { const g = groups.get(m.group_id), p = players.get(String(m.user_id)); if (g && p) { g.members.push(p); p.groups.push(g); } }
+  for (const d of r.duels) { d.as = JSON.parse(d.a_scores || "null"); d.bs = JSON.parse(d.b_scores || "null"); d.A = P(String(d.a)); d.B = P(String(d.b)); d.G = groups.get(d.gid); d.A.duels.push(d); d.B.duels.push(d); }
+  for (const p of players.values()) { const u = p.user; p.elo = u && elo.get(u.chat_id); p.fb = u && fb.get(u.chat_id); p.n = p.plays.length; p.avg = avg(p.plays.map(x => x.total)); p.best = p.n ? Math.max(...p.plays.map(x => x.total)) : 0;
+    p.first = p.n ? p.plays[0].date : null; p.last = p.n ? p.plays[p.n - 1].date : null; p.today = p.plays.find(x => x.date === r.day)?.total ?? null; }
+  const days = new Map(); for (const x of r.plays) { const d = days.get(x.date) || (days.set(x.date, { date: x.date, plays: [], fresh: 0, vis: 0, duels: 0 }), days.get(x.date)); d.plays.push(x); if (x.p.first === x.date) d.fresh++; }
+  for (const v of r.visits) { const d = days.get(v.date); if (d) d.vis = v.n; else days.set(v.date, { date: v.date, plays: [], fresh: 0, vis: v.n, duels: 0 }); }
+  for (const x of r.duels) { const d = days.get(x.day); if (d) d.duels++; }
+  return { ...r, users, players, groups, days: [...days.values()].sort((a, b) => a.date < b.date ? -1 : 1) };
+}
+
+// vertical bars; series = [{key, label, color}] stacked bottom-up; hover or tap a bar to read it; onPick adds a link to its own page
 function bars(rows, series, label, tipOf, opts = {}) {
-  const W = 640, H = opts.h || 200, padB = 34, padT = 8, n = rows.length, gap = n > 20 ? 2 : 4, bw = Math.max(2, (W - gap * (n - 1)) / n);
+  const W = 640, H = opts.h || 200, padB = 34, padT = 8, n = Math.max(1, rows.length), gap = n > 20 ? 2 : 4, bw = Math.max(2, (W - gap * (n - 1)) / n);
   const max = Math.max(1, ...rows.map(r => series.reduce((a, s) => a + (r[s.key] || 0), 0)));
   const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "chart"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", opts.aria || "");
   const mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
   svg.append(mk("line", { x1: 0, x2: W, y1: H - padB + .5, y2: H - padB + .5, stroke: css("--line") }));
   const tip = el("div", "tip"); let sel = null;
+  const show = (r, g) => { if (sel) sel.classList.remove("sel"); sel = g; g.classList.add("sel"); tip.replaceChildren(tipOf(r)); if (opts.onPick) { const a = el("a", null, "batafsil →"); a.href = opts.onPick(r); tip.append(a); } };
   rows.forEach((r, i) => { const x = i * (bw + gap); let y = H - padB; const g = mk("g", {});
-    series.forEach((s, k) => { const v = r[s.key] || 0; if (!v) return; const h = Math.max(2, (H - padB - padT) * v / max); y -= h; const top = k === series.length - 1 || series.slice(k + 1).every(t => !(r[t.key] || 0));
-      g.append(mk("rect", { x, y: y + (k ? 0 : 0), width: bw, height: Math.max(1, h - (k ? 2 : 0)), rx: top ? Math.min(4, bw / 2) : 0, fill: s.color, class: "bar" })); });
-    const hit = mk("rect", { x: x - gap / 2, y: 0, width: bw + gap, height: H, fill: "transparent", class: "hit", style: "cursor:pointer" });
-    hit.addEventListener("click", () => { if (sel) sel.classList.remove("sel"); sel = g; g.classList.add("sel"); tip.textContent = tipOf(r); });
+    series.forEach((s, k) => { const v = r[s.key] || 0; if (!v) return; const h = Math.max(2, (H - padB - padT) * v / max); y -= h; const top = series.slice(k + 1).every(t => !(r[t.key] || 0));
+      g.append(mk("rect", { x, y, width: bw, height: Math.max(1, h - (k ? 2 : 0)), rx: top ? Math.min(4, bw / 2) : 0, fill: s.color, class: "bar" })); });
+    const hit = mk("rect", { x: x - gap / 2, y: 0, width: bw + gap, height: H, fill: "transparent", style: "cursor:pointer" });
+    hit.addEventListener("click", () => show(r, g)); hit.addEventListener("mouseenter", () => show(r, g));
     svg.append(g, hit);
-    if (label(r, i)) { const t = mk("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle" }); t.textContent = label(r, i); svg.append(t); } });
+    const lb = label(r, i); if (lb) { const t = mk("text", { x: x + bw / 2, y: H - 8, "text-anchor": "middle" }); t.textContent = lb; svg.append(t); } });
   const wrap = el("div"); wrap.append(svg, tip);
   if (series.length > 1) { const lg = el("div", "legend"); series.forEach(s => { const sp = el("span"); const i = el("i"); i.style.background = s.color; sp.append(i, s.label); lg.append(sp); }); wrap.prepend(lg); }
   return wrap;
 }
-function card(title, sub, ...kids) { const c = el("section", "card"); const h = el("div"); h.append(el("h2", null, title)); if (sub) h.append(el("p", "sub", sub)); c.append(h, ...kids); return c; }
+function hbars(items) { const box = el("div"); box.style.cssText = "display:flex;flex-direction:column;gap:9px"; items.forEach(([n, v]) => { const r = el("div", "hbar"); const tr = el("div", "track"); const f = el("i"); f.style.width = Math.max(0, Math.min(100, v)) + "%"; tr.append(f); r.append(el("span", null, n), tr, el("b", null, String(v))); box.append(r); }); return box; }
+function card(title, sub, ...kids) { const c = el("section", "card"); const h = el("div"); h.append(el("h2", null, title)); if (sub) h.append(el("p", "sub", sub)); c.append(h, ...kids.filter(Boolean)); return c; }
+function kpis(list) { const kp = el("div", "kpis"); list.forEach(([v, k, s, href]) => { const b = el(href ? "a" : "div", "kpi"); if (href) { b.href = href; b.style.cssText = "color:inherit;text-decoration:none"; } b.append(el("b", null, String(v)), el("small", null, k)); if (s) b.append(el("small", null, s)); kp.append(b); }); return kp; }
+function link(href, cls) { const a = el("a", cls || "row"); a.href = href; return a; }
+const pHref = p => `#p/${encodeURIComponent(p.key)}`;
+const lbl = (rows, key) => (r, i) => (i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0) ? dl(r[key]) : "";
 
-function render(d) {
-  const t = d.totals, today = d.days.find(x => x.date === d.day) || { n: 0, fresh: 0, vis: 0, avg: "–" };
-  const head = el("header"); const h1 = el("h1"); h1.innerHTML = "Sez<span>gir</span> · panel"; const rf = el("button", "btn", "Yangilash"); rf.onclick = load;
-  const right = el("div"); right.style.cssText = "display:flex;gap:10px;align-items:center"; right.append(el("span", "meta", dl(d.day)), rf); head.append(h1, right);
-
-  const kp = el("div", "kpis");
-  [[t.players, "o'yinchi jami", `Telegram ${t.tgPlayers} · sayt ${t.players - t.tgPlayers}`], [today.n, "bugun o'ynadi", `yangi ${today.fresh} · kirgan ${today.vis}`],
-   [t.ret2, "2+ kun o'ynagan", `5+ kun: ${t.ret5}`], [t.botOn, "eslatma yoqilgan", `botda jami ${t.bot}`], [t.groups, "faol guruh", ""], [t.plays, "jami o'yin", `o'rtacha ball ${t.avg ?? "–"}`],
-   [t.duels, "tugagan duel", ""], [t.rated ? `${t.stars}★` : "–", "o'rtacha baho", t.rated ? `${t.rated} kishi baholadi` : "hali yo'q"]]
-    .forEach(([v, k, s]) => { const b = el("div", "kpi"); b.append(el("b", null, String(v)), el("small", null, k)); if (s) b.append(el("small", null, s)); kp.append(b); });
-
-  const daysChart = bars(d.days.map(x => ({ ...x, back: x.n - x.fresh })), [{ key: "back", label: "qaytib kelgan", color: css("--accent") }, { key: "fresh", label: "yangi o'yinchi", color: css("--gold") }],
-    (r, i) => (i === d.days.length - 1 || i % Math.ceil(d.days.length / 6) === 0) ? dl(r.date) : "", r => `${dl(r.date)}: ${r.n} o'yin (yangi ${r.fresh}) · saytga kirgan ${r.vis} · o'rtacha ${r.avg} · duel ${r.duels}`, { aria: "Kunlik o'yinlar" });
-  const visChart = bars(d.days, [{ key: "vis", label: "kirgan", color: css("--accent") }], (r, i) => (i === d.days.length - 1 || i % Math.ceil(d.days.length / 6) === 0) ? dl(r.date) : "", r => `${dl(r.date)}: ${r.vis} kishi saytga kirdi, ${r.n} tasi o'ynadi (${r.vis ? Math.round(r.n / r.vis * 100) : 0}%)`, { h: 160, aria: "Kunlik tashriflar" });
-  const hourChart = bars(d.hours.map((n, h) => ({ h, n })), [{ key: "n", label: "", color: css("--accent") }], r => r.h % 3 === 0 ? String(r.h).padStart(2, "0") : "", r => `${String(r.h).padStart(2, "0")}:00–${String(r.h).padStart(2, "0")}:59 — ${r.n} o'yin`, { h: 160, aria: "Soatlar bo'yicha" });
-  const histChart = bars(d.hist.map((n, i) => ({ i, n })), [{ key: "n", label: "", color: css("--accent") }], r => `${r.i * 10}`, r => `${r.i * 10}–${r.i === 9 ? 100 : r.i * 10 + 9} ball: ${r.n} o'yin`, { h: 160, aria: "Ballar taqsimoti" });
-
-  // per-test averages over the last 7 puzzle days
-  const last7 = d.testDays.slice(-7), tavg = d.tests.map((_, i) => last7.length ? Math.round(last7.reduce((a, x) => a + x.avg[i], 0) / last7.length) : 0);
-  const tbox = el("div"); tbox.style.cssText = "display:flex;flex-direction:column;gap:9px";
-  d.tests.forEach((n, i) => { const r = el("div", "hbar"); const tr = el("div", "track"); const f = el("i"); f.style.width = tavg[i] + "%"; tr.append(f); r.append(el("span", null, n), tr, el("b", null, String(tavg[i]))); tbox.append(r); });
-
-  // players
-  const tools = el("div", "tools"); const q = el("input"); q.placeholder = "Ism bo'yicha qidirish"; q.type = "search";
-  const sort = el("select"); [["n", "Ko'p o'ynagan"], ["last", "Oxirgi o'ynagan"], ["avg", "O'rtacha ball"], ["best", "Eng yaxshi ball"], ["first", "Yangi qo'shilgan"]].forEach(([v, l]) => { const o = el("option", null, l); o.value = v; sort.append(o); });
-  tools.append(q, sort); const list = el("div", "list");
-  const paint = () => { const s = q.value.trim().toLowerCase(), k = sort.value;
-    const rows = d.players.filter(p => !s || (p.name || "").toLowerCase().includes(s) || (p.groups || "").toLowerCase().includes(s))
-      .sort((a, b) => k === "last" || k === "first" ? String(b[k]).localeCompare(String(a[k])) : (b[k] - a[k]) || String(b.last).localeCompare(String(a.last)));
-    list.replaceChildren(...rows.map(p => { const r = el("div", "row"); const nm = el("div", "nm", p.name || `Saytdan · ${p.client}`); if (p.today != null) nm.append(el("em", null, `bugun ${p.today}`));
-      const num = el("div", "num"); num.append(el("b", null, `${p.n} kun`), document.createTextNode(` · o'rt. ${p.avg} · eng ${p.best}`));
-      const det = [p.first === p.last ? `${dl(p.first)}` : `${dl(p.first)} → ${dl(p.last)}`, p.groups || (p.name ? "guruhsiz" : "Telegramsiz"), p.elo ? `duel ${p.elo}` : "", p.stars ? `${p.stars}★` : "", p.name && !p.active ? "eslatma o'chiq" : ""].filter(Boolean).join(" · ");
-      r.append(nm, num, el("div", "det", det)); return r; }));
-    if (!rows.length) list.append(el("p", "empty", "Hech kim topilmadi.")); };
-  q.oninput = paint; sort.onchange = paint; paint();
-
-  const grp = el("div", "list"); d.groups.forEach(g => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, `${g.today}/${g.members}`), document.createTextNode(" bugun")); r.append(el("div", "nm", g.title || "Guruh"), num); grp.append(r); });
-  if (!d.groups.length) grp.append(el("p", "empty", "Faol guruh yo'q."));
-  const STATUS = { done: "tugagan", pending: "javob kutilmoqda", active: "o'ynalmoqda", expired: "muddati o'tgan", declined: "rad etilgan" };
-  const du = el("div", "list"); d.duels.forEach(x => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, x.status === "done" ? `${x.a_score} : ${x.b_score}` : STATUS[x.status] || x.status));
-    r.append(el("div", "nm", `${x.a || "?"} ⚔️ ${x.b || "?"}`), num, el("div", "det", [dl(x.day), x.grp, x.status === "done" && x.delta ? `±${Math.abs(x.delta)} ochko` : ""].filter(Boolean).join(" · "))); du.append(r); });
-  if (!d.duels.length) du.append(el("p", "empty", "Hali duel yo'q."));
-  const fb = el("div", "list"); d.feedback.forEach(f => { const r = el("div", "row"); const num = el("div", "num"); num.append(el("b", null, "★".repeat(f.stars) + "☆".repeat(5 - f.stars)));
-    const tm = new Date(f.t + 5 * 36e5); r.append(el("div", "nm", `${f.name || "O'yinchi"}${f.username ? " · @" + f.username : ""}`), num, el("div", "det", `${tm.getUTCDate()}-${MONTHS[tm.getUTCMonth()]} ${String(tm.getUTCHours()).padStart(2, "0")}:${String(tm.getUTCMinutes()).padStart(2, "0")}`));
-    if (f.comment) r.append(el("div", "quote", f.comment)); fb.append(r); });
-  if (!d.feedback.length) fb.append(el("p", "empty", "Hali baho yo'q."));
-
-  const two1 = el("div", "two"); two1.append(card("Qaysi soatda o'ynashadi", "oxirgi 30 kun, Toshkent vaqti", hourChart), card("Ballar taqsimoti", "oxirgi 30 kun", histChart));
-  $app.replaceChildren(head, kp,
-    card("Kunlik o'yinlar", "oxirgi 30 kun: qaytib kelganlar va yangi o'yinchilar", daysChart),
-    card("Saytga kirganlar", "kunlik tashrif; bosilsa o'ynaganlar ulushi chiqadi", visChart),
-    two1,
-    card("Testlar bo'yicha o'rtacha ball", "oxirgi 7 kun", tbox),
-    card(`O'yinchilar (${d.players.length})`, "ism, necha kun o'ynagani, o'rtacha va eng yaxshi ball, guruhi", tools, list),
-    card("Guruhlar", "bugun o'ynaganlar / bellashuvdagilar", grp),
-    card("Oxirgi duellar", null, du),
-    card("Baholar va izohlar", null, fb));
+function head(title, back) {
+  const h = el("header"); const left = el("div", "crumbs");
+  if (back) { const b = el("a", "back", "‹ Orqaga"); b.href = "#"; b.onclick = e => { e.preventDefault(); history.length > 1 ? history.back() : (location.hash = ""); }; left.append(b); }
+  const h1 = el("h1"); if (back) h1.textContent = title; else h1.innerHTML = "Sez<span>gir</span> · panel"; left.append(h1);
+  const right = el("div"); right.style.cssText = "display:flex;gap:10px;align-items:center"; const rf = el("button", "btn", "Yangilash"); rf.onclick = load; right.append(el("span", "meta", dl(D.day)), rf); h.append(left, right); return h;
 }
+function playerRow(p, extra) { const r = link(pHref(p)); const nm = el("div", "nm", p.name); if (p.today != null) nm.append(el("em", null, `bugun ${p.today}`));
+  const num = el("div", "num"); num.append(el("b", null, p.n ? `${p.n} kun` : "o'ynamagan"), document.createTextNode(p.n ? ` · o'rt. ${p.avg} · eng ${p.best}` : ""));
+  const det = [p.n ? (p.first === p.last ? dl(p.first) : `${dl(p.first)} → ${dl(p.last)}`) : "", p.groups.map(g => g.title).join(", ") || (p.user ? "guruhsiz" : "Telegramsiz"), p.elo ? `duel ${p.elo.elo}` : "", p.fb?.stars ? `${p.fb.stars}★` : "", p.user && !p.user.active ? "eslatma o'chiq" : "", extra || ""].filter(Boolean).join(" · ");
+  r.append(nm, num, el("div", "det", det)); return r; }
+const STATUS = { done: "tugagan", pending: "javob kutilmoqda", active: "o'ynalmoqda", expired: "muddati o'tgan", declined: "rad etilgan" };
+function duelRow(x) { const r = el("div", "row"); const nm = el("div", "nm"); const a = el("a", null, x.A.name), b = el("a", null, x.B.name); a.href = pHref(x.A); b.href = pHref(x.B); a.style.color = b.style.color = "inherit"; nm.append(a, " ⚔️ ", b);
+  const num = el("div", "num"); num.append(x.status === "done" ? el("b", null, `${x.a_score} : ${x.b_score}`) : el("span", "pill" + (x.status === "active" ? " ok" : ""), STATUS[x.status] || x.status));
+  const side = (s, sc, st) => sc != null ? `${s} o'ynadi (${sc})` : st ? `${s} boshladi, tugatmadi` : `${s} hali o'ynamadi`;
+  const det = [`chaqirildi ${tm(x.created)}`, x.accepted ? `qabul ${tm(x.accepted)}` : "", x.G ? x.G.title : "", x.status === "done" && x.delta ? `${x.a_score > x.b_score ? x.A.name : x.b_score > x.a_score ? x.B.name : "durang"} ±${Math.abs(x.delta)}` : "",
+    x.status === "active" ? `${side(x.A.name, x.a_score, x.a_start)}; ${side(x.B.name, x.b_score, x.b_start)}` : ""].filter(Boolean).join(" · ");
+  r.append(nm, num, el("div", "det", det));
+  if (x.as && x.bs) { const g = el("div", "duo"); g.append(el("span"), el("span", null, x.A.name.slice(0, 10)), el("span", null, x.B.name.slice(0, 10))); x.as.forEach((v, i) => { const w = x.bs[i]; g.append(el("span", null, testName(i, x.day)), el("b", v > w ? "w" : null, String(v)), el("b", w > v ? "w" : null, String(w))); }); r.append(g); }
+  return r; }
+
+// ---------- pages ----------
+function home() {
+  const all = [...D.players.values()], played = all.filter(p => p.n), today = D.days.find(x => x.date === D.day) || { plays: [], fresh: 0, vis: 0 };
+  const open = D.duels.filter(x => x.status === "pending" || x.status === "active"), rated = D.feedback.filter(f => f.stars);
+  // global search
+  const sbox = el("div", "card"); const q = el("input"); q.type = "search"; q.placeholder = "Qidirish: o'yinchi, guruh, sana (masalan 21-noy)"; q.style.cssText = "font:15px var(--font);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%";
+  const res = el("div", "res list"); sbox.append(q, res);
+  q.oninput = () => { const s = q.value.trim().toLowerCase(); res.replaceChildren(); if (s.length < 2) return;
+    all.filter(p => p.name.toLowerCase().includes(s) || (p.user && String(p.user.chat_id).includes(s))).slice(0, 12).forEach(p => res.append(playerRow(p)));
+    [...D.groups.values()].filter(g => (g.title || "").toLowerCase().includes(s)).forEach(g => { const r = link(`#g/${g.chat_id}`); r.append(el("div", "nm", "👥 " + g.title), el("div", "num", `${g.members.length} kishi`)); res.append(r); });
+    D.days.filter(d => dl(d.date).includes(s) || d.date.includes(s)).slice(-5).forEach(d => { const r = link(`#d/${d.date}`); r.append(el("div", "nm", "📅 " + dl(d.date)), el("div", "num", `${d.plays.length} o'yin`)); res.append(r); });
+    if (!res.children.length) res.append(el("p", "empty", "Hech narsa topilmadi.")); };
+
+  const last30 = D.days.slice(-30).map(d => ({ ...d, n: d.plays.length, back: d.plays.length - d.fresh, avg: avg(d.plays.map(x => x.total)) }));
+  const daysChart = bars(last30, [{ key: "back", label: "qaytib kelgan", color: css("--accent") }, { key: "fresh", label: "yangi o'yinchi", color: css("--gold") }], lbl(last30, "date"),
+    r => `${dl(r.date)}: ${r.n} o'yin (yangi ${r.fresh}) · kirgan ${r.vis} · o'rtacha ${r.avg} · duel ${r.duels}`, { aria: "Kunlik o'yinlar", onPick: r => `#d/${r.date}` });
+  const visChart = bars(last30, [{ key: "vis", label: "", color: css("--accent") }], lbl(last30, "date"), r => `${dl(r.date)}: ${r.vis} kishi kirdi, ${r.n} tasi o'ynadi (${r.vis ? Math.round(r.n / r.vis * 100) : 0}%)`, { h: 160, aria: "Tashriflar", onPick: r => `#d/${r.date}` });
+  const recent = D.plays.filter(x => x.date >= (last30[0]?.date || "")), hours = Array.from({ length: 24 }, (_, h) => ({ h, n: 0 })), hist = Array.from({ length: 10 }, (_, i) => ({ i, n: 0 }));
+  recent.forEach(x => { hours[new Date(x.created + 5 * 36e5).getUTCHours()].n++; hist[Math.min(9, Math.floor(x.total / 10))].n++; });
+  const hourChart = bars(hours, [{ key: "n", color: css("--accent") }], r => r.h % 3 === 0 ? String(r.h).padStart(2, "0") : "", r => `${String(r.h).padStart(2, "0")}:00–${String(r.h).padStart(2, "0")}:59 — ${r.n} o'yin`, { h: 160, aria: "Soatlar" });
+  const histChart = bars(hist, [{ key: "n", color: css("--accent") }], r => String(r.i * 10), r => `${r.i * 10}–${r.i === 9 ? 100 : r.i * 10 + 9} ball: ${r.n} o'yin`, { h: 160, aria: "Ballar" });
+  const week = D.plays.filter(x => x.date >= (D.days.slice(-7)[0]?.date || ""));
+  const tAvg = D.tests.map((_, i) => [testName(i, D.day), avg(week.filter(x => !(i === 3 && x.date < "2026-11-21")).map(x => Number(x.scores[i]) || 0))]);
+  const two = el("div", "two"); two.append(card("Qaysi soatda o'ynashadi", "oxirgi 30 kun, Toshkent vaqti", hourChart), card("Ballar taqsimoti", "oxirgi 30 kun", histChart));
+  const top = played.slice().sort((a, b) => b.n - a.n || b.avg - a.avg).slice(0, 5), more = link("#players", "row"); more.append(el("div", "nm", `Barcha o'yinchilar (${all.length}) →`));
+  const lst = el("div", "list"); top.forEach(p => lst.append(playerRow(p))); lst.append(more);
+  const gl = el("div", "list"); [...D.groups.values()].filter(g => g.active).sort((a, b) => b.members.length - a.members.length).forEach(g => { const r = link(`#g/${g.chat_id}`); const t = g.members.filter(p => p.today != null).length; const num = el("div", "num"); num.append(el("b", null, `${t}/${g.members.length}`), " bugun"); r.append(el("div", "nm", g.title || "Guruh"), num); gl.append(r); });
+  $app.replaceChildren(head(), sbox,
+    kpis([[played.length, "o'yinchi jami", `Telegram ${played.filter(p => p.user).length} · sayt ${played.filter(p => !p.user).length}`, "#players"], [today.plays.length, "bugun o'ynadi", `yangi ${today.fresh} · kirgan ${today.vis}`, `#d/${D.day}`],
+      [played.filter(p => p.n >= 2).length, "2+ kun o'ynagan", `5+ kun: ${played.filter(p => p.n >= 5).length}`, "#players"], [D.users.size ? [...D.users.values()].filter(u => u.active).length : 0, "eslatma yoqilgan", `botda jami ${D.users.size}`, "#players"],
+      [[...D.groups.values()].filter(g => g.active).length, "faol guruh", "", "#groups"], [D.plays.length, "jami o'yin", `o'rtacha ball ${avg(D.plays.map(x => x.total))}`],
+      [open.length, "ochiq duel", `tugagan ${D.duels.filter(x => x.status === "done").length}`, "#duels"], [rated.length ? (rated.reduce((a, f) => a + f.stars, 0) / rated.length).toFixed(1) + "★" : "–", "o'rtacha baho", `${rated.length} kishi`, "#ratings"]]),
+    card("Kunlik o'yinlar", "oxirgi 30 kun · ustunni bosing yoki ustiga olib boring", daysChart),
+    card("Saytga kirganlar", "kunlik tashrif va o'ynaganlar ulushi", visChart), two,
+    card("Testlar bo'yicha o'rtacha ball", "oxirgi 7 kun", hbars(tAvg)),
+    card("Eng faol o'yinchilar", null, lst), card("Guruhlar", "bugun o'ynaganlar / bellashuvdagilar", gl));
+}
+
+function playersPage() {
+  const all = [...D.players.values()]; const tools = el("div", "tools"); const q = el("input"); q.placeholder = "Ism yoki guruh bo'yicha qidirish"; q.type = "search";
+  const sort = el("select"); [["n", "Ko'p o'ynagan"], ["last", "Oxirgi o'ynagan"], ["avg", "O'rtacha ball"], ["best", "Eng yaxshi ball"], ["first", "Yangi qo'shilgan"], ["elo", "Duel ochkosi"]].forEach(([v, l]) => { const o = el("option", null, l); o.value = v; sort.append(o); });
+  const tabs = el("div", "tabs"); let f = "all"; const F = { all: ["Hammasi", () => true], today: ["Bugun o'ynagan", p => p.today != null], tg: ["Telegram", p => !!p.user], site: ["Faqat sayt", p => !p.user], idle: ["Botda, o'ynamagan", p => p.user && !p.n], off: ["Eslatma o'chiq", p => p.user && !p.user.active] };
+  Object.entries(F).forEach(([k, [l, fn]]) => { const t = el("button", "tab" + (k === f ? " on" : "")); t.append(l, el("b", null, String(all.filter(fn).length))); t.onclick = () => { f = k; [...tabs.children].forEach(c => c.classList.toggle("on", c === t)); paint(); }; tabs.append(t); });
+  tools.append(q, sort); const list = el("div", "list");
+  const val = (p, k) => k === "elo" ? (p.elo?.elo || 0) : p[k];
+  const paint = () => { const s = q.value.trim().toLowerCase(), k = sort.value;
+    const rows = all.filter(F[f][1]).filter(p => !s || p.name.toLowerCase().includes(s) || p.groups.some(g => (g.title || "").toLowerCase().includes(s)))
+      .sort((a, b) => k === "last" || k === "first" ? String(val(b, k) || "").localeCompare(String(val(a, k) || "")) : (val(b, k) - val(a, k)) || String(b.last || "").localeCompare(String(a.last || "")));
+    list.replaceChildren(...rows.map(p => playerRow(p))); if (!rows.length) list.append(el("p", "empty", "Hech kim topilmadi.")); };
+  q.oninput = paint; sort.onchange = paint; paint();
+  $app.replaceChildren(head("O'yinchilar", true), card(`O'yinchilar (${all.length})`, "bosilsa o'yinchining to'liq statistikasi ochiladi", tabs, tools, list));
+}
+
+function playerPage(key) {
+  const p = D.players.get(key); if (!p) return home();
+  const k = kpis([[p.n, "kun o'ynadi", p.n ? `${dl(p.first)} → ${dl(p.last)}` : ""], [p.avg || "–", "o'rtacha ball", ""], [p.best || "–", "eng yaxshi", ""], [p.today ?? "–", "bugun", ""],
+    [streakOf(p), "ketma-ket kun", ""], [p.elo ? p.elo.elo : "–", "duel ochkosi", p.elo ? `${p.elo.w}G · ${p.elo.l}M · ${p.elo.d}D` : ""]]);
+  const info = el("div", "list"); const add = (a, b) => { const r = el("div", "row"); r.append(el("div", "det", a), el("div", "num", b)); r.firstChild.style.gridColumn = "auto"; info.append(r); };
+  if (p.user) { add("Telegram ID", String(p.user.chat_id)); add("Botga qo'shilgan", tm(p.user.created)); add("Eslatmalar", p.user.active ? "yoqilgan" : "o'chiq"); }
+  add("Guruhlar", p.groups.map(g => g.title).join(", ") || "yo'q"); if (p.fb) add("Baho", p.fb.stars ? `${"★".repeat(p.fb.stars)}${"☆".repeat(5 - p.fb.stars)} · ${tm(p.fb.commented || p.fb.rated)}` : `so'raldi ${tm(p.fb.asked)}, javob yo'q`);
+  const kids = [k, card("Ma'lumot", null, info)];
+  if (p.fb?.comment) kids.push(card("Izohi", null, el("div", "quote", p.fb.comment)));
+  if (p.n) {
+    kids.push(card("Ballari kunlar bo'yicha", "ustunni bosing: testlar bo'yicha ball", bars(p.plays, [{ key: "total", color: css("--accent") }], lbl(p.plays, "date"), r => `${dl(r.date)}: ${r.total} · ` + r.scores.map((v, i) => `${testName(i, r.date)} ${v}`).join(" · "), { h: 170, aria: "Ballar", onPick: r => `#d/${r.date}` })));
+    kids.push(card("Testlar bo'yicha o'rtacha", null, hbars(D.tests.map((_, i) => [testName(i, D.day), avg(p.plays.filter(x => !(i === 3 && x.date < "2026-11-21")).map(x => Number(x.scores[i]) || 0))]))));
+    const t = el("table", "grid"); const hr = el("tr"); ["Sana", "Jami", "1", "2", "3", "4", "5", "Soat"].forEach(h => hr.append(el("th", null, h))); t.append(hr);
+    p.plays.slice().reverse().forEach(x => { const r = el("tr", "link"); r.onclick = () => location.hash = `#d/${x.date}`; r.append(el("td", null, dl(x.date))); const tb = el("td"); tb.append(el("b", null, String(x.total))); r.append(tb); x.scores.forEach((v, i) => { const c = el("td", null, String(v)); c.title = testName(i, x.date); r.append(c); }); r.append(el("td", null, tm(x.created).split(" ")[1])); t.append(r); });
+    const sc = el("div", "scroll"); sc.append(t); kids.push(card("Barcha o'yinlari", "1–5: Anor, Chillak, Minora, Ketmon (21-noy gacha Doira), Non", sc));
+  }
+  if (p.duels.length) { const l = el("div", "list"); p.duels.forEach(x => l.append(duelRow(x))); kids.push(card(`Duellari (${p.duels.length})`, null, l)); }
+  $app.replaceChildren(head(p.name, true), ...kids);
+}
+function streakOf(p) { if (!p.n) return 0; const set = new Set(p.plays.map(x => x.date)); let d = D.day, s = 0; const prev = x => new Date(Date.parse(x + "T12:00:00Z") - 864e5).toISOString().slice(0, 10); if (!set.has(d)) d = prev(d); while (set.has(d)) { s++; d = prev(d); } return s; }
+
+function dayPage(date) {
+  const d = D.days.find(x => x.date === date) || { date, plays: [], fresh: 0, vis: 0 }; const rows = d.plays.slice().sort((a, b) => b.total - a.total);
+  const t = el("table", "grid"); const hr = el("tr"); ["O'yinchi", "Jami", ...D.tests.map((_, i) => testName(i, date).slice(0, 5)), "Soat"].forEach(h => hr.append(el("th", null, h))); t.append(hr);
+  rows.forEach((x, i) => { const r = el("tr", "link"); r.onclick = () => location.hash = pHref(x.p); r.append(el("td", null, `${i + 1}. ${x.p.name}${x.p.first === date ? " 🆕" : ""}`)); const tb = el("td"); tb.append(el("b", null, String(x.total))); r.append(tb); x.scores.forEach(v => r.append(el("td", null, String(v)))); r.append(el("td", null, tm(x.created).split(" ")[1])); t.append(r); });
+  const sc = el("div", "scroll"); sc.append(t);
+  const dd = D.duels.filter(x => x.day === date), dl2 = el("div", "list"); dd.forEach(x => dl2.append(duelRow(x)));
+  const i = D.days.findIndex(x => x.date === date), nav = el("div", "tabs"); if (i > 0) { const a = el("a", "tab", "‹ " + dl(D.days[i - 1].date)); a.href = `#d/${D.days[i - 1].date}`; nav.append(a); } if (i >= 0 && i < D.days.length - 1) { const a = el("a", "tab", dl(D.days[i + 1].date) + " ›"); a.href = `#d/${D.days[i + 1].date}`; nav.append(a); }
+  $app.replaceChildren(head(dl(date), true), nav,
+    kpis([[rows.length, "o'ynadi", `yangi ${d.fresh}`], [d.vis, "saytga kirdi", d.vis ? `${Math.round(rows.length / d.vis * 100)}% o'ynadi` : ""], [avg(rows.map(x => x.total)) || "–", "o'rtacha ball", ""], [rows[0] ? rows[0].total : "–", "eng yaxshi", rows[0] ? rows[0].p.name : ""], [dd.length, "duel", ""]]),
+    rows.length ? card("Testlar bo'yicha o'rtacha", null, hbars(D.tests.map((_, j) => [testName(j, date), avg(rows.map(x => Number(x.scores[j]) || 0))]))) : null,
+    card(`Kim qancha oldi (${rows.length})`, "bosilsa o'yinchi sahifasi ochiladi · 🆕 birinchi o'yini", rows.length ? sc : el("p", "empty", "Bu kuni hech kim o'ynamagan.")),
+    dd.length ? card(`Shu kungi duellar (${dd.length})`, null, dl2) : null);
+}
+
+function groupsPage() { const l = el("div", "list"); [...D.groups.values()].sort((a, b) => b.active - a.active || b.members.length - a.members.length).forEach(g => { const r = link(`#g/${g.chat_id}`); const num = el("div", "num"); num.append(el("b", null, `${g.members.filter(p => p.today != null).length}/${g.members.length}`), " bugun"); r.append(el("div", "nm", g.title || "Guruh"), num, el("div", "det", [g.active ? "faol" : "bot chiqarilgan", `qo'shilgan ${tm(g.created)}`].join(" · "))); l.append(r); });
+  $app.replaceChildren(head("Guruhlar", true), card(`Guruhlar (${D.groups.size})`, null, l)); }
+function groupPage(id) {
+  const g = D.groups.get(Number(id)); if (!g) return groupsPage();
+  const week = D.days.slice(-7).map(d => d.date), ms = g.members.slice().sort((a, b) => (b.today ?? -1) - (a.today ?? -1) || b.n - a.n);
+  const t = el("table", "grid"); const hr = el("tr"); ["A'zo", "Bugun", "7 kun", "Jami kun", "O'rt."].forEach(h => hr.append(el("th", null, h))); t.append(hr);
+  ms.forEach(p => { const r = el("tr", "link"); r.onclick = () => location.hash = pHref(p); const w = p.plays.filter(x => week.includes(x.date)); r.append(el("td", null, p.name)); const tb = el("td"); tb.append(el("b", null, p.today ?? "–")); r.append(tb, el("td", null, `${w.length} · ${w.reduce((a, x) => a + x.total, 0)}`), el("td", null, String(p.n)), el("td", null, String(p.avg || "–"))); t.append(r); });
+  const sc = el("div", "scroll"); sc.append(t);
+  const daily = D.days.slice(-30).map(d => ({ date: d.date, n: d.plays.filter(x => g.members.includes(x.p)).length }));
+  const dd = D.duels.filter(x => x.gid === g.chat_id), dl2 = el("div", "list"); dd.slice(0, 30).forEach(x => dl2.append(duelRow(x)));
+  $app.replaceChildren(head(g.title || "Guruh", true),
+    kpis([[g.members.length, "bellashuvda", ""], [ms.filter(p => p.today != null).length, "bugun o'ynadi", ""], [dd.length, "duel", `ochiq ${dd.filter(x => x.status === "pending" || x.status === "active").length}`]]),
+    card("Kunlik o'ynaganlar", "oxirgi 30 kun", bars(daily, [{ key: "n", color: css("--accent") }], lbl(daily, "date"), r => `${dl(r.date)}: ${r.n} kishi o'ynadi`, { h: 150, onPick: r => `#d/${r.date}` })),
+    card("A'zolar", "7 kun: o'ynagan kunlar · ballar yig'indisi", sc), dd.length ? card("Guruh duellari", null, dl2) : null);
+}
+
+function duelsPage() {
+  const tabs = el("div", "tabs"), list = el("div", "list"); let f = "open";
+  const F = { open: ["Ochiq", x => x.status === "pending" || x.status === "active"], pending: ["Javob kutilmoqda", x => x.status === "pending"], active: ["O'ynalmoqda", x => x.status === "active"], done: ["Tugagan", x => x.status === "done"], other: ["Bekor / rad", x => x.status === "expired" || x.status === "declined"], all: ["Hammasi", () => true] };
+  const q = el("input"); q.type = "search"; q.placeholder = "Ism bo'yicha qidirish"; const tools = el("div", "tools"); tools.append(q);
+  Object.entries(F).forEach(([k, [l, fn]]) => { const t = el("button", "tab" + (k === f ? " on" : "")); t.append(l, el("b", null, String(D.duels.filter(fn).length))); t.onclick = () => { f = k; [...tabs.children].forEach(c => c.classList.toggle("on", c === t)); paint(); }; tabs.append(t); });
+  const paint = () => { const s = q.value.trim().toLowerCase(); const rows = D.duels.filter(F[f][1]).filter(x => !s || x.A.name.toLowerCase().includes(s) || x.B.name.toLowerCase().includes(s)); list.replaceChildren(...rows.map(duelRow)); if (!rows.length) list.append(el("p", "empty", "Bunday duel yo'q.")); };
+  q.oninput = paint; paint();
+  $app.replaceChildren(head("Duellar", true), card(`Duellar (${D.duels.length})`, "kim kimni chaqirgan, kim o'ynab bo'lgan, natija va testlar", tabs, tools, list));
+}
+function ratingsPage() { const l = el("div", "list"); D.feedback.slice().sort((a, b) => (b.commented || b.rated || 0) - (a.commented || a.rated || 0)).forEach(f => { const p = D.players.get(String(f.chat_id)); const r = p ? link(pHref(p)) : el("div", "row"); const num = el("div", "num"); num.append(el("b", null, f.stars ? "★".repeat(f.stars) + "☆".repeat(5 - f.stars) : "javob yo'q"));
+    r.append(el("div", "nm", `${f.name || p?.name || "O'yinchi"}${f.username ? " · @" + f.username : ""}`), num, el("div", "det", f.stars ? tm(f.commented || f.rated) : `so'raldi ${tm(f.asked)}`)); if (f.comment) r.append(el("div", "quote", f.comment)); l.append(r); });
+  const rated = D.feedback.filter(f => f.stars); const dist = [5, 4, 3, 2, 1].map(n => [`${n}★`, rated.length ? Math.round(rated.filter(f => f.stars === n).length / rated.length * 100) : 0]);
+  $app.replaceChildren(head("Baholar", true), kpis([[rated.length ? (rated.reduce((a, f) => a + f.stars, 0) / rated.length).toFixed(1) + "★" : "–", "o'rtacha", ""], [rated.length, "baholadi", `so'ralgan ${D.feedback.length}`], [D.feedback.filter(f => f.comment).length, "izoh yozdi", ""]]),
+    card("Taqsimot", "foizda", hbars(dist)), card("Barcha baholar", null, l)); }
+
+function route() { if (!D) return; const h = decodeURIComponent(location.hash.slice(1)); window.scrollTo(0, 0);
+  if (h === "players") playersPage(); else if (h.startsWith("p/")) playerPage(h.slice(2)); else if (h.startsWith("d/")) dayPage(h.slice(2)); else if (h === "groups") groupsPage(); else if (h.startsWith("g/")) groupPage(h.slice(2)); else if (h === "duels") duelsPage(); else if (h === "ratings") ratingsPage(); else home(); }
+window.addEventListener("hashchange", route);
 
 async function load() {
   if (!T || !T.initData) { gate("Bu panel faqat Telegram ichida, Sezgir muallifi uchun ochiladi."); return; }
   try { const r = await fetch(API + "/admin/stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ initData: T.initData }) });
     if (r.status === 403) { gate("Bu panel faqat Sezgir muallifi uchun."); return; }
-    if (!r.ok) throw 0; render(await r.json()); }
-  catch { gate("Ma'lumot yuklanmadi. Internetni tekshirib, qayta oching."); }
+    if (!r.ok) throw 0; D = index(await r.json()); route(); }
+  catch (e) { console.error(e); gate("Ma'lumot yuklanmadi. Internetni tekshirib, qayta oching."); }
 }
 load();
 })();
