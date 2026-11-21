@@ -103,6 +103,8 @@ async function onMessage(env, msg) {
   const name = (msg.from?.first_name || "").slice(0, 40);
   const [cmd, arg] = text.split(/\s+/, 2);
   let u = await env.DB.prepare("SELECT * FROM tg_users WHERE chat_id = ?").bind(chat).first();
+  if (cmd === "/baholar" && chat === OWNER_ID) return fbList(env, chat);
+  if (text && !text.startsWith("/")) { const f = await env.DB.prepare("SELECT * FROM feedback WHERE chat_id = ? AND wait > ?").bind(chat, Date.now() - FB_WAIT).first(); if (f) return fbComment(env, msg, f); }
   if (cmd === "/qollash" || (cmd === "/start" && arg === "qollash")) { const n = cmd === "/qollash" ? parseInt(arg, 10) : 0; return supportMenu(env, chat, n >= 1 && n <= 10000 ? n : 0); }
   if (cmd === "/duel" || (cmd === "/start" && arg === "duel")) return duelPicker(env, chat, chat, null);
   if (cmd === "/start" && /^dg-?\d{1,20}$/.test(arg || "")) { const gid = Number(arg.slice(2)); await autoJoin(env, gid, msg.from); await env.DB.prepare("UPDATE tg_users SET active = 1 WHERE chat_id = ?").bind(chat).run(); return duelPicker(env, chat, chat, gid); }
@@ -180,6 +182,57 @@ async function maybeAskSupport(env, client) { // once per person, after their 5t
   const claim = await env.DB.prepare("UPDATE tg_users SET asked = 1 WHERE chat_id = ? AND asked = 0").bind(u.chat_id).run(); if (!claim.meta?.changes || given) return;
   const links = await Promise.all(STARS.map(x => invoiceLink(env, x, false)));
   await tg(env, "sendMessage", { chat_id: u.chat_id, text: ASK_TEXT, reply_markup: askButtons(u.client, links) });
+}
+// ---------- ratings: after a player's 2nd day the bot asks for 1-5 stars and an optional comment; the owner sees them in /baholar ----------
+const FB_ON = false; // asking players starts after the owner approves the look
+const FB_DAYS = 2, FB_WAIT = 48 * 36e5;
+const starsOf = n => "★".repeat(n) + "☆".repeat(5 - n);
+const FB_ASK = "<b>Sezgir sizga ma'qul keldimi?</b>\n\nO'yinni bir necha kundan beri o'ynayapsiz, rahmat! Uni <b>1 dan 5 gacha</b> yulduz bilan baholang:";
+const fbButtons = () => ({ inline_keyboard: [[1, 2, 3, 4, 5].map(n => ({ text: `${n} ⭐`, callback_data: `fb:${n}` }))] });
+async function fbAsk(env, chat, name) {
+  const claim = await env.DB.prepare("INSERT OR IGNORE INTO feedback (chat_id, name, asked) VALUES (?, ?, ?)").bind(chat, name || null, Date.now()).run();
+  if (!claim.meta?.changes) return false; // asked before
+  const r = await tg(env, "sendMessage", { chat_id: chat, text: FB_ASK, parse_mode: "HTML", reply_markup: fbButtons() });
+  return !!r.ok;
+}
+async function maybeAskFeedback(env, client) { if (!FB_ON) return;
+  const u = await env.DB.prepare("SELECT u.chat_id, u.name FROM tg_users u LEFT JOIN feedback f ON f.chat_id = u.chat_id WHERE u.client = ? AND u.active = 1 AND f.chat_id IS NULL").bind(client).first(); if (!u) return;
+  const d = await env.DB.prepare("SELECT COUNT(DISTINCT date) AS n FROM plays WHERE client = ?").bind(client).first(); if (d.n < FB_DAYS) return;
+  await fbAsk(env, u.chat_id, u.name);
+}
+const who = f => `${esc(f.name || "O'yinchi")}${f.username ? ` (@${esc(f.username)})` : ""}`;
+async function fbRate(env, q, from, v) {
+  const f = await env.DB.prepare("SELECT * FROM feedback WHERE chat_id = ?").bind(from).first();
+  if (!f) return answerCb(env, q, "");
+  const chat = q.message?.chat?.id, mid = q.message?.message_id;
+  if (v === "skip") {
+    await env.DB.prepare("UPDATE feedback SET wait = 0 WHERE chat_id = ?").bind(from).run(); await answerCb(env, q, "");
+    if (chat) await tg(env, "editMessageText", { chat_id: chat, message_id: mid, text: `<b>Bahoyingiz: ${starsOf(f.stars || 0)} (${f.stars || 0}/5)</b>\n\nRahmat! Ertangi jumboqda ko'rishguncha 👋`, parse_mode: "HTML" });
+    return;
+  }
+  const n = Number(v); if (!(n >= 1 && n <= 5)) return answerCb(env, q, "");
+  const name = [q.from.first_name, q.from.last_name].filter(Boolean).join(" ").slice(0, 60) || f.name;
+  await env.DB.prepare("UPDATE feedback SET stars = ?, rated = ?, wait = ?, name = ?, username = ? WHERE chat_id = ?").bind(n, Date.now(), Date.now(), name, q.from.username || null, from).run();
+  await answerCb(env, q, "Rahmat! ⭐");
+  if (chat) await tg(env, "editMessageText", { chat_id: chat, message_id: mid, parse_mode: "HTML",
+    text: `<b>Bahoyingiz: ${starsOf(n)} (${n}/5)</b>\n\nRahmat! Taklif, shikoyat yoki e'tirozingiz bo'lsa, <b>shu yerga yozib yuboring</b>. Har bir fikr o'yinni yaxshilashga yordam beradi.`,
+    reply_markup: { inline_keyboard: [[{ text: "Yozadigan narsam yo'q", callback_data: "fb:skip" }]] } });
+  await tg(env, "sendMessage", { chat_id: OWNER_ID, parse_mode: "HTML", text: `⭐ <b>Yangi baho:</b> ${who({ name, username: q.from.username })} · ${starsOf(n)} ${n}/5${f.stars != null && f.stars !== n ? ` (avval ${f.stars}/5)` : ""}` });
+}
+async function fbComment(env, msg, f) { // the next private text after rating
+  const text = String(msg.text).slice(0, 2000), now = Date.now();
+  await env.DB.prepare("UPDATE feedback SET comment = CASE WHEN comment IS NULL THEN ? ELSE comment || char(10) || '—' || char(10) || ? END, commented = ?, wait = 0 WHERE chat_id = ?").bind(text, text, now, f.chat_id).run();
+  await tg(env, "sendMessage", { chat_id: msg.chat.id, text: "<b>Rahmat! Fikringiz muallifga yetkazildi 🙏</b>", parse_mode: "HTML" });
+  await tg(env, "sendMessage", { chat_id: OWNER_ID, parse_mode: "HTML", text: `💬 <b>Yangi izoh:</b> ${who(f)} · ${starsOf(f.stars || 0)} ${f.stars || 0}/5\n\n${esc(text)}` });
+}
+const fmtTime = t => { const d = new Date(t + 5 * 36e5); return `${d.getUTCDate()}-${["yan","fev","mar","apr","may","iyun","iyul","avg","sen","okt","noy","dek"][d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; };
+async function fbList(env, chat) {
+  const all = await env.DB.prepare("SELECT COUNT(*) AS asked, COUNT(stars) AS n, AVG(stars) AS avg, SUM(stars = 5) AS s5, SUM(stars = 4) AS s4, SUM(stars = 3) AS s3, SUM(stars = 2) AS s2, SUM(stars = 1) AS s1, COUNT(comment) AS c FROM feedback").first();
+  const rows = (await env.DB.prepare("SELECT * FROM feedback WHERE stars IS NOT NULL ORDER BY COALESCE(commented, rated) DESC LIMIT 15").all()).results;
+  let text = `<b>⭐ Baholar</b>\n\nSo'ralgan: ${all.asked} kishi · baholagan: <b>${all.n}</b> · izoh yozgan: ${all.c}` + (all.n ? `\nO'rtacha: <b>${(all.avg).toFixed(1)} / 5</b>\n5★ ${all.s5} · 4★ ${all.s4} · 3★ ${all.s3} · 2★ ${all.s2} · 1★ ${all.s1}` : "");
+  if (rows.length) text += "\n\n<b>Oxirgilari:</b>";
+  for (const f of rows) { const add = `\n\n${starsOf(f.stars)} ${who(f)} · ${fmtTime(f.commented || f.rated)}${f.comment ? `\n<i>${esc(f.comment.length > 300 ? f.comment.slice(0, 300) + "…" : f.comment)}</i>` : ""}`; if (text.length + add.length > 3900) break; text += add; }
+  await tg(env, "sendMessage", { chat_id: chat, text, parse_mode: "HTML" });
 }
 const askButtons = (client, links) => ({ inline_keyboard: [STARS.map((x, i) => ({ text: `⭐ ${x}`, url: links[i] })), [{ text: "Boshqa miqdor", web_app: { url: `${SITE}?cid=${client}&qollab=1` } }]] });
 async function supporters(env) {
@@ -318,6 +371,7 @@ async function myGroups(env, client, date) { // for the site: "guruhingizda N-o'
 async function tgSetup(env, origin) {
   const hook = await tg(env, "setWebhook", { url: `${origin}/tg/hook`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message", "my_chat_member", "pre_checkout_query", "callback_query"], drop_pending_updates: true });
   const cmds = await tg(env, "setMyCommands", { commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "duel", description: "Do'stni duelga chaqirish ⚔️" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
+  await tg(env, "setMyCommands", { scope: { type: "chat", chat_id: OWNER_ID }, commands: [{ command: "start", description: "Eslatmalarni yoqish" }, { command: "natija", description: "Bugungi holatim va seriya" }, { command: "duel", description: "Do'stni duelga chaqirish ⚔️" }, { command: "baholar", description: "O'yinchilar baholari va izohlari" }, { command: "qollash", description: "Sezgir'ni qo'llab-quvvatlash ⭐" }, { command: "stop", description: "Eslatmalarni o'chirish" }] });
   await tg(env, "setMyCommands", { scope: { type: "all_group_chats" }, commands: [{ command: "reyting", description: "Bugungi guruh reytingi" }, { command: "qatnashish", description: "Bellashuvga qo'shilish" }, { command: "duel", description: "Duelga chaqirish ⚔️" }, { command: "duelreyting", description: "Duel reytingi" }] });
   const menu = await tg(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "O'ynash", web_app: { url: SITE } } });
   const desc = await tg(env, "setMyDescription", { description: "Sezgir: har kuni 5 ta qisqa idrok testi, 2 daqiqa. Bot har kuni ertalab yangi jumboqni eslatadi va seriyangizni sanaydi." });
@@ -350,6 +404,7 @@ async function onCallback(env, q) {
   const [k, x, y] = String(q.data || "").split(":"), from = q.from?.id;
   if (k === "dp") return duelPick(env, q, from, Number(x), Number(y));
   if (k === "da" || k === "dr") return duelAnswer(env, q, from, x, k === "da");
+  if (k === "fb") return fbRate(env, q, from, x);
   await answerCb(env, q, "");
 }
 
@@ -670,7 +725,7 @@ export default {
         if (fresh) {
           await bump(env, "p:" + b.date); await bump(env, "s:" + b.date, total);
           if (!await env.DB.prepare("SELECT 1 FROM plays WHERE client = ? AND date <> ? LIMIT 1").bind(client, b.date).first()) await bump(env, "players");
-          ctx.waitUntil(announcePlay(env, client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, client).catch(() => {}));
+          ctx.waitUntil(announcePlay(env, client, b.date, total).catch(() => {})); ctx.waitUntil(maybeAskSupport(env, client).catch(() => {})); ctx.waitUntil(maybeAskFeedback(env, client).catch(() => {}));
         }
         const out = await stats(env, b.date, total, fresh ? [total, scores] : null);
         return json(client !== b.client ? { ...out, client } : out, 200, h);
